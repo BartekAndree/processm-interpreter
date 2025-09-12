@@ -11,5 +11,4 @@ class ProcessmInterpreterApplicationTests {
     @Test
     fun contextLoads() {
     }
-
 }

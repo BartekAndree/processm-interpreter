@@ -38,3 +38,10 @@ out/
 
 ### Kotlin ###
 .kotlin
+
+### DOCS ###
+docs/
+
+### AI Agents ###
+junie.md
+claude.md

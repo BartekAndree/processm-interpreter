@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProcessM Interpreter UI</title>
+    <style>
+        :root {
+            --background-color: #1e1e1e;
+            --text-color: #d4d4d4;
+            --accent-color: #00aaff;
+            --green-color: #00ff99;
+            --red-color: #ff6666;
+            --yellow-color: #ffd700;
+            --input-bg-color: #2a2a2a;
+            --border-color: #3c3c3c;
+            --container-bg-color: #252526;
+        }
+        body {
+            background-color: var(--background-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 2rem;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: var(--green-color);
+            border-bottom: 2px solid var(--green-color);
+            padding-bottom: 10px;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+        .tab-button {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            padding: 15px 20px;
+            cursor: pointer;
+            font-size: 1rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-button.active, .tab-button:hover {
+            color: var(--accent-color);
+            border-bottom-color: var(--accent-color);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .endpoint {
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            background-color: var(--container-bg-color);
+        }
+        h2 {
+            color: var(--accent-color);
+            margin-top: 0;
+        }
+        button {
+            background-color: var(--accent-color);
+            color: #fff;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0088cc;
+        }
+        button.secondary {
+            background-color: var(--input-bg-color);
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+        }
+        button.secondary:hover {
+            background-color: var(--accent-color);
+            color: #fff;
+        }
+        button.danger {
+            background-color: var(--red-color);
+        }
+        button.danger:hover {
+            background-color: #cc5252;
+        }
+        .output-block {
+            margin-top: 1rem;
+        }
+        .output-block pre {
+            background-color: var(--input-bg-color);
+            border: 1px solid var(--border-color);
+            padding: 1rem;
+            border-radius: 4px;
+            min-height: 50px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--yellow-color);
+        }
+        input[type="file"], input[type="text"], select, textarea {
+            width: 100%;
+            background-color: var(--input-bg-color);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 10px;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            min-height: 150px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .log-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 10px;
+            background-color: var(--input-bg-color);
+        }
+        .log-actions button {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>ProcessM PQL Interpreter UI</h1>
+
+    <div class="tabs">
+        <button class="tab-button active" onclick="openTab('logs')">Log Management</button>
+        <button class="tab-button" onclick="openTab('query')">PQL Query</button>
+    </div>
+
+    <div id="logs" class="tab-content active">
+        <div class="endpoint">
+            <h2>Available Logs</h2>
+            <div id="logList"></div>
+            <button id="refreshLogsButton">Refresh List</button>
+        </div>
+
+        <div class="endpoint">
+            <h2>Upload Log</h2>
+            <div class="form-group">
+                <label for="xesFileInput">Upload XES File</label>
+                <input type="file" id="xesFileInput" accept=".xes,.xes.gz">
+            </div>
+            <button id="uploadButton">Upload</button>
+            <button id="loadSampleButton" class="secondary">Load Hospital Log</button>
+            <div class="output-block">
+                <pre id="uploadOutput">...</pre>
+            </div>
+        </div>
+    </div>
+
+    <div id="query" class="tab-content">
+        <div class="endpoint">
+            <h2>Execute PQL Query</h2>
+            <div class="form-group">
+                <label for="activeLogSelect">Active Log</label>
+                <select id="activeLogSelect"></select>
+            </div>
+            <div class="form-group">
+                <label for="pqlQuerySelect">Sample Queries</label>
+                <select id="pqlQuerySelect">
+                    <option value="">Select a sample query...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="pqlQueryText">PQL Query</label>
+                <textarea id="pqlQueryText">SELECT * FROM event</textarea>
+            </div>
+            <button id="pqlButton">Run Query</button>
+            <div class="output-block">
+                <pre id="pqlOutput">...</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- API & UI Helpers ---
+    const API_BASE = '/api';
+
+    async function apiCall(endpoint, options = {}, outputElement) {
+        outputElement.style.color = 'var(--text-color)';
+        outputElement.textContent = 'Executing...';
+        try {
+            const response = await fetch(`${API_BASE}${endpoint}`, options);
+            const resultText = await response.text();
+            let formattedResult;
+            try {
+                const jsonResult = JSON.parse(resultText);
+                formattedResult = JSON.stringify(jsonResult, null, 2);
+            } catch (e) {
+                formattedResult = resultText;
+            }
+            outputElement.textContent = `Status: ${response.status} ${response.statusText}\n\n${formattedResult}`;
+            if (!response.ok) {
+                 outputElement.style.color = 'var(--red-color)';
+            }
+            return JSON.parse(resultText); // Assume JSON response for further processing
+        } catch (error) {
+            outputElement.style.color = 'var(--red-color)';
+            outputElement.textContent = `Error: ${error.message}`;
+            throw error;
+        }
+    }
+
+    function openTab(tabName) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(tabName).classList.add('active');
+        document.querySelector(`.tab-button[onclick="openTab('${tabName}')"]`).classList.add('active');
+    }
+
+    // --- Log Management ---
+    const logList = document.getElementById('logList');
+    const uploadOutput = document.getElementById('uploadOutput');
+    const activeLogSelect = document.getElementById('activeLogSelect');
+
+    async function refreshLogs() {
+        try {
+            const logs = await apiCall('/logs', {}, uploadOutput);
+            logList.innerHTML = '';
+            activeLogSelect.innerHTML = '';
+            if (logs && logs.length > 0) {
+                logs.forEach(log => {
+                    const logId = log.logId;
+                    const listItem = document.createElement('div');
+                    listItem.className = 'log-list-item';
+                    listItem.innerHTML = `
+                        <span><strong>${log.name || logId}</strong> (${logId})</span>
+                        <div class="log-actions">
+                            <button onclick="getLogStatistics('${logId}')">Stats</button>
+                            <button class="danger" onclick="deleteLog('${logId}')">Delete</button>
+                        </div>
+                    `;
+                    logList.appendChild(listItem);
+
+                    const option = document.createElement('option');
+                    option.value = logId;
+                    option.textContent = `${log.name || logId} (${logId})`;
+                    activeLogSelect.appendChild(option);
+                });
+            } else {
+                logList.innerHTML = '<p>No logs found.</p>';
+            }
+        } catch (error) {
+            console.error("Failed to refresh logs", error);
+        }
+    }
+
+    async function getLogStatistics(logId) {
+        await apiCall(`/logs/${logId}/statistics`, {}, uploadOutput);
+    }
+
+    async function deleteLog(logId) {
+        if (confirm(`Are you sure you want to delete log "${logId}"?`)) {
+            await apiCall(`/logs/${logId}?deleteAllData=true`, { method: 'DELETE' }, uploadOutput);
+            refreshLogs();
+        }
+    }
+
+    document.getElementById('refreshLogsButton').addEventListener('click', refreshLogs);
+
+    document.getElementById('uploadButton').addEventListener('click', async () => {
+        const fileInput = document.getElementById('xesFileInput');
+        if (fileInput.files.length === 0) {
+            uploadOutput.style.color = 'var(--red-color)';
+            uploadOutput.textContent = 'Please select a file first.';
+            return;
+        }
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        await apiCall('/logs/upload', { method: 'POST', body: formData }, uploadOutput);
+        refreshLogs();
+    });
+
+    document.getElementById('loadSampleButton').addEventListener('click', async () => {
+        const params = new URLSearchParams({
+            resourcePath: 'logs/Hospital_log.xes',
+            logId: 'Hospital_log'
+        });
+        await apiCall(`/logs/load-sample?${params}`, { method: 'POST' }, uploadOutput);
+        refreshLogs();
+    });
+
+
+    // --- PQL Query ---
+    const pqlButton = document.getElementById('pqlButton');
+    const pqlQueryText = document.getElementById('pqlQueryText');
+    const pqlOutput = document.getElementById('pqlOutput');
+    const pqlQuerySelect = document.getElementById('pqlQuerySelect');
+
+    const sampleQueries = {
+        "Show all events": "SELECT * FROM event",
+        "Count events per activity": "SELECT activity, COUNT(eventId) FROM event GROUP BY activity",
+        "Find traces with specific activity": "SELECT DISTINCT traceId FROM event WHERE activity = 'Triage'",
+        "Filter events by timestamp": "SELECT * FROM event WHERE timestamp > '2015-01-01T12:00:00Z'",
+        "Find traces with more than 5 events": "SELECT traceId, COUNT(eventId) as event_count FROM event GROUP BY traceId HAVING event_count > 5"
+    };
+
+    function populateSampleQueries() {
+        for (const [name, query] of Object.entries(sampleQueries)) {
+            const option = document.createElement('option');
+            option.value = query;
+            option.textContent = name;
+            pqlQuerySelect.appendChild(option);
+        }
+    }
+
+    pqlQuerySelect.addEventListener('change', (e) => {
+        if (e.target.value) {
+            pqlQueryText.value = e.target.value;
+        }
+    });
+
+    pqlButton.addEventListener('click', async () => {
+        const logId = activeLogSelect.value;
+        const query = pqlQueryText.value;
+        if (!logId) {
+            pqlOutput.style.color = 'var(--red-color)';
+            pqlOutput.textContent = 'Please select an active log first.';
+            return;
+        }
+        const body = { logId, query };
+        await apiCall('/query/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        }, pqlOutput);
+    });
+
+
+    // --- Initial Load ---
+    document.addEventListener('DOMContentLoaded', () => {
+        openTab('logs');
+        refreshLogs();
+        populateSampleQueries();
+    });
+
+</script>
+</body>
+</html>

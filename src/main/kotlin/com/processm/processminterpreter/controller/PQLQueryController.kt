@@ -19,7 +19,7 @@ import java.time.LocalDateTime
  * Provides HTTP endpoints for executing and validating PQL queries
  */
 @RestController
-@RequestMapping("/query")
+@RequestMapping("/api/query")
 @CrossOrigin(origins = ["*"])
 class PQLQueryController(
     private val pqlQueryService: PQLQueryService,

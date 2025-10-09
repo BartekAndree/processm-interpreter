@@ -34,7 +34,7 @@ import org.springframework.web.multipart.MultipartFile
  * Provides HTTP endpoints for CRUD operations on process logs
  */
 @RestController
-@RequestMapping("/logs")
+@RequestMapping("/api/logs")
 @CrossOrigin(origins = ["*"])
 class LogController(
     private val logService: LogService,

@@ -1,5 +1,6 @@
 package com.processm.processminterpreter.xes
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.processm.processminterpreter.model.EventNode
 import com.processm.processminterpreter.service.LogService
 import org.neo4j.driver.Driver
@@ -23,6 +24,21 @@ class XESLoader(
 ) {
 
     private val logger = LoggerFactory.getLogger(XESLoader::class.java)
+    private val objectMapper = ObjectMapper()
+
+    /**
+     * Sanitize attributes to be Neo4j-compatible.
+     * Replaces colons in keys and converts complex values to JSON strings.
+     */
+    private fun sanitizeAttributes(attributes: Map<String, Any>): Map<String, Any> {
+        return attributes.mapKeys { it.key.replace(":", "_").replace(".", "_") }
+            .mapValues { (_, value) ->
+                when (value) {
+                    is Map<*, *>, is Collection<*> -> objectMapper.writeValueAsString(value)
+                    else -> value
+                }
+            }
+    }
 
     /**
      * Load XES file into Neo4j database
@@ -48,7 +64,7 @@ class XESLoader(
             logger.error("Error loading XES file", e)
             XESLoadResult(
                 success = false,
-                error = e.message ?: "Unknown error occurred",
+                error = e.cause?.message ?: e.message ?: "Unknown error occurred",
                 message = "Failed to load XES file",
             )
         }
@@ -68,11 +84,11 @@ class XESLoader(
                         logId: ${'$'}logId,
                         name: ${'$'}name,
                         createdAt: ${'$'}createdAt,
-                        updatedAt: ${'$'}updatedAt,
-                        attributes: ${'$'}attributes
+                        updatedAt: ${'$'}updatedAt
                     })
+                    SET log += ${'$'}attributes
                     RETURN log.logId as logId
-                """.trimIndent()
+                """
 
                 val logResult = tx.run(
                     createLogQuery,
@@ -81,7 +97,7 @@ class XESLoader(
                         "name" to xesLog.logNode.name,
                         "createdAt" to xesLog.logNode.createdAt,
                         "updatedAt" to xesLog.logNode.updatedAt,
-                        "attributes" to xesLog.logNode.attributes,
+                        "attributes" to sanitizeAttributes(xesLog.logNode.attributes),
                     ),
                 )
 
@@ -110,12 +126,12 @@ class XESLoader(
             CREATE (trace:Trace {
                 traceId: ${'$'}traceId,
                 caseId: ${'$'}caseId,
-                createdAt: ${'$'}createdAt,
-                attributes: ${'$'}attributes
+                createdAt: ${'$'}createdAt
             })
+            SET trace += ${'$'}attributes
             CREATE (log)-[:CONTAINS]->(trace)
             RETURN trace.traceId as traceId
-        """.trimIndent()
+        """
 
         val traceResult = tx.run(
             createTraceQuery,
@@ -124,7 +140,7 @@ class XESLoader(
                 "traceId" to trace.traceId,
                 "caseId" to trace.caseId,
                 "createdAt" to trace.createdAt,
-                "attributes" to trace.attributes,
+                "attributes" to sanitizeAttributes(trace.attributes),
             ),
         )
 
@@ -159,12 +175,12 @@ class XESLoader(
                 resource: ${'$'}resource,
                 lifecycle: ${'$'}lifecycle,
                 cost: ${'$'}cost,
-                createdAt: ${'$'}createdAt,
-                attributes: ${'$'}attributes
+                createdAt: ${'$'}createdAt
             })
+            SET event += ${'$'}attributes
             CREATE (trace)-[:HAS_EVENT]->(event)
             RETURN event.eventId as eventId
-        """.trimIndent()
+        """
 
         val eventResult = tx.run(
             createEventQuery,
@@ -177,7 +193,7 @@ class XESLoader(
                 "lifecycle" to event.lifecycle,
                 "cost" to event.cost,
                 "createdAt" to event.createdAt,
-                "attributes" to event.attributes,
+                "attributes" to sanitizeAttributes(event.attributes),
             ),
         )
 
@@ -195,7 +211,7 @@ class XESLoader(
             MATCH (from:Event {eventId: ${'$'}fromEventId})
             MATCH (to:Event {eventId: ${'$'}toEventId})
             CREATE (from)-[:FOLLOWS]->(to)
-        """.trimIndent()
+        """
 
         tx.run(
             createFollowsQuery,
@@ -225,7 +241,7 @@ class XESLoader(
             logger.error("Error loading XES from resource: $resourcePath", e)
             XESLoadResult(
                 success = false,
-                error = e.message ?: "Unknown error occurred",
+                error = e.cause?.message ?: e.message ?: "Unknown error occurred",
                 message = "Failed to load XES from resource",
             )
         }
@@ -256,5 +272,6 @@ data class XESLoadResult(
     val eventsCount: Int = 0,
     val message: String,
     val error: String? = null,
+    val filename: String? = null, // Added for context in the UI
     val timestamp: LocalDateTime = LocalDateTime.now(),
 )

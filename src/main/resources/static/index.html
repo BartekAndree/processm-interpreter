@@ -330,11 +330,62 @@
     const pqlQuerySelect = document.getElementById('pqlQuerySelect');
 
     const sampleQueries = {
-        "Show all events": "SELECT * FROM event",
-        "Count events per activity": "SELECT activity, COUNT(eventId) FROM event GROUP BY activity",
-        "Find traces with specific activity": "SELECT DISTINCT traceId FROM event WHERE activity = 'Triage'",
-        "Filter events by timestamp": "SELECT * FROM event WHERE timestamp > '2015-01-01T12:00:00Z'",
-        "Find traces with more than 5 events": "SELECT traceId, COUNT(eventId) as event_count FROM event GROUP BY traceId HAVING event_count > 5"
+        // Basic SELECT queries
+        "1. Show all events": "SELECT * FROM event",
+        "2. Show all traces": "SELECT * FROM trace",
+        "3. Show specific event fields": "SELECT activity, timestamp, resource FROM event",
+        "4. Show first 10 events": "SELECT * FROM event LIMIT 10",
+
+        // WHERE clause - basic conditions
+        "5. Filter by activity": "SELECT * FROM event WHERE activity = 'Registration'",
+        "6. Filter by resource": "SELECT * FROM event WHERE resource = 'Doctor'",
+        "7. Filter with LIKE": "SELECT * FROM event WHERE activity LIKE 'X-Ray'",
+        "8. Filter with comparison": "SELECT * FROM event WHERE timestamp > '2011-10-01'",
+
+        // WHERE clause - advanced operators
+        "9. Filter with IN operator": "SELECT * FROM event WHERE activity IN ('Registration', 'Triage', 'Consultation')",
+        "10. Filter with BETWEEN": "SELECT * FROM event WHERE timestamp BETWEEN '2011-10-01' AND '2011-10-31'",
+        "11. Check for NULL values": "SELECT * FROM event WHERE resource IS NULL",
+        "12. Check for NOT NULL": "SELECT * FROM event WHERE resource IS NOT NULL",
+
+        // WHERE clause - AND/OR logic
+        "13. Multiple conditions (AND)": "SELECT * FROM event WHERE activity = 'Registration' AND resource = 'Nurse'",
+        "14. Multiple conditions (OR)": "SELECT * FROM event WHERE activity = 'Registration' OR activity = 'Triage'",
+        "15. Complex AND/OR logic": "SELECT * FROM event WHERE (activity = 'Registration' OR activity = 'Triage') AND resource = 'Nurse'",
+
+        // DISTINCT queries
+        "16. Get unique activities": "SELECT DISTINCT activity FROM event",
+        "17. Get unique resources": "SELECT DISTINCT resource FROM event",
+        "18. Get unique trace IDs": "SELECT DISTINCT traceId FROM event",
+
+        // Aggregation queries
+        "19. Count all events": "SELECT COUNT(*) as total_events FROM event",
+        "20. Count events per activity": "SELECT activity, COUNT(*) as count FROM event GROUP BY activity",
+        "21. Count events per resource": "SELECT resource, COUNT(*) as count FROM event GROUP BY resource",
+        "22. Count events per trace": "SELECT traceId, COUNT(*) as event_count FROM event GROUP BY traceId",
+
+        // ORDER BY queries
+        "23. Order by timestamp": "SELECT * FROM event ORDER BY timestamp ASC",
+        "24. Order by activity (DESC)": "SELECT * FROM event ORDER BY activity DESC",
+        "25. Order by multiple fields": "SELECT * FROM event ORDER BY activity ASC, timestamp DESC",
+
+        // ORDER BY with aggregation
+        "26. Activities by frequency": "SELECT activity, COUNT(*) as count FROM event GROUP BY activity ORDER BY count DESC",
+        "27. Resources by event count": "SELECT resource, COUNT(*) as count FROM event GROUP BY resource ORDER BY count DESC",
+
+        // LIMIT queries
+        "28. Top 5 most frequent activities": "SELECT activity, COUNT(*) as count FROM event GROUP BY activity ORDER BY count DESC LIMIT 5",
+        "29. First 20 events": "SELECT * FROM event ORDER BY timestamp ASC LIMIT 20",
+        "30. Latest 10 events": "SELECT * FROM event ORDER BY timestamp DESC LIMIT 10",
+
+        // HAVING clause
+        "31. Traces with many events": "SELECT traceId, COUNT(*) as event_count FROM event GROUP BY traceId HAVING event_count > 10",
+        "32. Frequent activities only": "SELECT activity, COUNT(*) as count FROM event GROUP BY activity HAVING count > 50",
+
+        // Complex queries combining multiple features
+        "33. Active resources analysis": "SELECT resource, COUNT(*) as event_count FROM event WHERE resource IS NOT NULL GROUP BY resource ORDER BY event_count DESC LIMIT 10",
+        "34. Activity patterns": "SELECT activity, COUNT(*) as count FROM event WHERE activity IN ('Registration', 'Triage', 'Consultation') GROUP BY activity ORDER BY count DESC",
+        "35. Time-filtered aggregation": "SELECT activity, COUNT(*) as count FROM event WHERE timestamp > '2011-10-01' GROUP BY activity HAVING count > 5 ORDER BY count DESC"
     };
 
     function populateSampleQueries() {

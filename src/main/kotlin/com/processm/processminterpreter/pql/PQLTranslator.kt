@@ -32,11 +32,27 @@ class PQLTranslator {
      * Translate SELECT query to Cypher
      */
     private fun translateSelectQuery(pqlQuery: String, logId: String?): CypherQuery {
-        val query = pqlQuery.trim()
+        var query = pqlQuery.trim()
 
-        // Parse basic SELECT query structure with ORDER BY and LIMIT
+        // Parse LIMIT first (from the end)
+        val limitRegex = Regex("""\s+limit\s+(\d+)\s*$""", RegexOption.IGNORE_CASE)
+        val limitMatch = limitRegex.find(query)
+        val limitClause = limitMatch?.groupValues?.get(1)
+        if (limitMatch != null) {
+            query = query.substring(0, limitMatch.range.first)
+        }
+
+        // Parse ORDER BY second (from the end)
+        val orderByRegex = Regex("""\s+order\s+by\s+(.+?)\s*$""", RegexOption.IGNORE_CASE)
+        val orderByMatch = orderByRegex.find(query)
+        val orderByClause = orderByMatch?.groupValues?.get(1)?.trim()
+        if (orderByMatch != null) {
+            query = query.substring(0, orderByMatch.range.first)
+        }
+
+        // Parse the rest with simpler regex
         val selectRegex = Regex(
-            """select\s+(distinct\s+)?(.+?)\s+from\s+(\w+)(?:\s+where\s+(.+?))?(?:\s+group by\s+(.+?))?(?:\s+having\s+(.+?))?(?:\s+order by\s+(.+?))?(?:\s+limit\s+(\d+))?""",
+            """select\s+(distinct\s+)?(.+?)\s+from\s+(\w+)(?:\s+where\s+(.+?))?(?:\s+group by\s+(.+?))?(?:\s+having\s+(.+?))?\s*$""",
             setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
         )
 
@@ -49,8 +65,6 @@ class PQLTranslator {
         val whereClause = matchResult.groupValues[4].takeIf { it.isNotBlank() }
         val groupByClause = matchResult.groupValues[5].takeIf { it.isNotBlank() }
         val havingClause = matchResult.groupValues[6].takeIf { it.isNotBlank() }
-        val orderByClause = matchResult.groupValues[7].takeIf { it.isNotBlank() }
-        val limitClause = matchResult.groupValues[8].takeIf { it.isNotBlank() }
 
         logger.debug("Parsed - DISTINCT: $distinct, SELECT: $selectClause, FROM: $fromClause, WHERE: $whereClause, GROUP BY: $groupByClause, HAVING: $havingClause, ORDER BY: $orderByClause, LIMIT: $limitClause")
 
@@ -177,7 +191,7 @@ class PQLTranslator {
         val hasAggregation = selectClause.contains(Regex("""(COUNT|AVG|SUM|MIN|MAX)\s*\(""", RegexOption.IGNORE_CASE))
 
         if (groupByClause != null || hasAggregation) {
-            val withClause = translateSelectClause(selectClause, "event")
+            val withClause = translateSelectClause(selectClause, "event", withAliases = true)
             cypherBuilder.append(" WITH $withClause")
 
             if (havingClause != null) {
@@ -254,10 +268,11 @@ class PQLTranslator {
 
     /**
      * Translate SELECT clause to Cypher RETURN clause
+     * withAliases: if true, ensures all fields have aliases (required for WITH clause)
      */
-    private fun translateSelectClause(selectClause: String, nodeAlias: String): String {
+    private fun translateSelectClause(selectClause: String, nodeAlias: String, withAliases: Boolean = false): String {
         return when (selectClause.trim()) {
-            "*" -> nodeAlias
+            "*" -> "properties($nodeAlias) as $nodeAlias"
             else -> {
                 val fields = selectClause.split(",").map { it.trim() }
                 fields.joinToString(", ") { field ->
@@ -286,7 +301,13 @@ class PQLTranslator {
                             val alias = aliasMatch.groupValues[2].trim()
                             "${getCypherField(actualField, nodeAlias)} AS $alias"
                         } else {
-                            getCypherField(field, nodeAlias)
+                            val cypherField = getCypherField(field, nodeAlias)
+                            // If withAliases is true, add alias for regular fields
+                            if (withAliases) {
+                                "$cypherField AS $field"
+                            } else {
+                                cypherField
+                            }
                         }
                     }
                 }

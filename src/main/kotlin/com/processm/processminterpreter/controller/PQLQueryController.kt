@@ -34,10 +34,20 @@ class PQLQueryController(
     fun executeQuery(
         @RequestBody request: PQLQueryRequest,
     ): ResponseEntity<PQLQueryResponse> {
-        logger.info("Executing PQL query: ${request.query}")
+        logger.info("=== Executing PQL Query ===")
+        logger.info("PQL: ${request.query}")
+        logger.info("LogId: ${request.logId ?: "ALL"}")
 
         return try {
             val result = pqlQueryService.executePQLQuery(request.query, request.logId)
+
+            logger.info("Generated Cypher: ${result.cypherQuery}")
+            logger.info("Execution time: ${result.executionTimeMs}ms")
+            logger.info("Results count: ${result.resultCount}")
+
+            if (!result.success) {
+                logger.warn("Query failed: ${result.error}")
+            }
 
             val response =
                 PQLQueryResponse(

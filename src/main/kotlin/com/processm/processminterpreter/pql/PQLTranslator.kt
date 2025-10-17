@@ -53,7 +53,7 @@ class PQLTranslator {
         // Parse the rest with simpler regex
         val selectRegex = Regex(
             """select\s+(distinct\s+)?(.+?)\s+from\s+(\w+)(?:\s+where\s+(.+?))?(?:\s+group by\s+(.+?))?(?:\s+having\s+(.+?))?\s*$""",
-            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
         )
 
         val matchResult = selectRegex.find(query)
@@ -66,7 +66,11 @@ class PQLTranslator {
         val groupByClause = matchResult.groupValues[5].takeIf { it.isNotBlank() }
         val havingClause = matchResult.groupValues[6].takeIf { it.isNotBlank() }
 
-        logger.debug("Parsed - DISTINCT: $distinct, SELECT: $selectClause, FROM: $fromClause, WHERE: $whereClause, GROUP BY: $groupByClause, HAVING: $havingClause, ORDER BY: $orderByClause, LIMIT: $limitClause")
+        logger.debug(
+            "Parsed - DISTINCT: $distinct, SELECT: $selectClause, FROM: $fromClause, " +
+                "WHERE: $whereClause, GROUP BY: $groupByClause, HAVING: $havingClause, " +
+                "ORDER BY: $orderByClause, LIMIT: $limitClause",
+        )
 
         return when (fromClause) {
             "log" -> buildLogQuery(distinct, selectClause, whereClause, groupByClause, havingClause, orderByClause, limitClause, logId)
@@ -79,7 +83,16 @@ class PQLTranslator {
     /**
      * Build Cypher query for log selection
      */
-    private fun buildLogQuery(distinct: Boolean, selectClause: String, whereClause: String?, groupByClause: String?, havingClause: String?, orderByClause: String?, limitClause: String?, logId: String?): CypherQuery {
+    private fun buildLogQuery(
+        distinct: Boolean,
+        selectClause: String,
+        whereClause: String?,
+        groupByClause: String?,
+        havingClause: String?,
+        orderByClause: String?,
+        limitClause: String?,
+        logId: String?,
+    ): CypherQuery {
         val cypherBuilder = StringBuilder()
         val parameters = mutableMapOf<String, Any>()
 
@@ -127,7 +140,16 @@ class PQLTranslator {
     /**
      * Build Cypher query for trace selection
      */
-    private fun buildTraceQuery(distinct: Boolean, selectClause: String, whereClause: String?, groupByClause: String?, havingClause: String?, orderByClause: String?, limitClause: String?, logId: String?): CypherQuery {
+    private fun buildTraceQuery(
+        distinct: Boolean,
+        selectClause: String,
+        whereClause: String?,
+        groupByClause: String?,
+        havingClause: String?,
+        orderByClause: String?,
+        limitClause: String?,
+        logId: String?,
+    ): CypherQuery {
         val cypherBuilder = StringBuilder()
         val parameters = mutableMapOf<String, Any>()
 
@@ -170,7 +192,16 @@ class PQLTranslator {
     /**
      * Build Cypher query for event selection
      */
-    private fun buildEventQuery(distinct: Boolean, selectClause: String, whereClause: String?, groupByClause: String?, havingClause: String?, orderByClause: String?, limitClause: String?, logId: String?): CypherQuery {
+    private fun buildEventQuery(
+        distinct: Boolean,
+        selectClause: String,
+        whereClause: String?,
+        groupByClause: String?,
+        havingClause: String?,
+        orderByClause: String?,
+        limitClause: String?,
+        logId: String?,
+    ): CypherQuery {
         val cypherBuilder = StringBuilder()
         val parameters = mutableMapOf<String, Any>()
 
@@ -205,7 +236,9 @@ class PQLTranslator {
             }
             val returnFields = selectClause.split(',').map { it.trim() }.map {
                 val parts = it.split(Regex("""\s+as\s+""", RegexOption.IGNORE_CASE), 2)
-                if (parts.size == 2) parts[1] else {
+                if (parts.size == 2) {
+                    parts[1]
+                } else {
                     val field = parts[0]
                     if (field.contains("(")) {
                         field.substringBefore("(").trim()
@@ -226,7 +259,6 @@ class PQLTranslator {
             if (limitClause != null) {
                 cypherBuilder.append(" LIMIT $limitClause")
             }
-
         } else {
             // Add a RETURN clause
             cypherBuilder.append(" RETURN ")
@@ -345,7 +377,6 @@ class PQLTranslator {
 
         return "$field $operator \$$paramName"
     }
-
 
     /**
      * Translate WHERE clause to Cypher WHERE condition

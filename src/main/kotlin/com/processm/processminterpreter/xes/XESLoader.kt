@@ -118,7 +118,7 @@ class XESLoader(
                         "createdAt" to xesLog.logNode.createdAt,
                         "updatedAt" to xesLog.logNode.updatedAt,
                         "attributes" to sanitizeAttributes(xesLog.logNode.attributes),
-                    )
+                    ),
                 ).consume()
             }
         }
@@ -127,14 +127,16 @@ class XESLoader(
         val totalTraces = xesLog.traces.size
         val totalBatches = (totalTraces + BATCH_SIZE - 1) / BATCH_SIZE
         xesLog.traces.chunked(BATCH_SIZE).forEachIndexed { index, traceBatch ->
-            logger.info("Processing batch ${index + 1} / $totalBatches. Traces ${index * BATCH_SIZE + 1} to ${(index * BATCH_SIZE) + traceBatch.size}")
+            val startTrace = index * BATCH_SIZE + 1
+            val endTrace = (index * BATCH_SIZE) + traceBatch.size
+            logger.info("Processing batch ${index + 1} / $totalBatches. Traces $startTrace to $endTrace")
 
             val tracesData = traceBatch.map { trace ->
                 mapOf(
                     "traceId" to trace.traceNode.traceId,
                     "caseId" to trace.traceNode.caseId,
                     "createdAt" to trace.traceNode.createdAt,
-                    "attributes" to sanitizeAttributes(trace.traceNode.attributes)
+                    "attributes" to sanitizeAttributes(trace.traceNode.attributes),
                 )
             }
 
@@ -149,7 +151,7 @@ class XESLoader(
                         "lifecycle" to event.eventNode.lifecycle,
                         "cost" to event.eventNode.cost,
                         "createdAt" to event.eventNode.createdAt,
-                        "attributes" to sanitizeAttributes(event.eventNode.attributes)
+                        "attributes" to sanitizeAttributes(event.eventNode.attributes),
                     )
                 }
             }

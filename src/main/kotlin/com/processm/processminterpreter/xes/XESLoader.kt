@@ -1,12 +1,10 @@
 package com.processm.processminterpreter.xes
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.processm.processminterpreter.model.EventNode
 import com.processm.processminterpreter.service.LogService
 import org.neo4j.driver.Driver
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 import java.io.InputStream
 import java.time.LocalDateTime
 
@@ -16,7 +14,6 @@ import java.time.LocalDateTime
  * Handles parsing XES files and storing them with proper relationships
  */
 @Service
-@Transactional
 class XESLoader(
     private val xesParser: XESParser,
     private val logService: LogService,
@@ -25,6 +22,30 @@ class XESLoader(
 
     private val logger = LoggerFactory.getLogger(XESLoader::class.java)
     private val objectMapper = ObjectMapper()
+    private val BATCH_SIZE = 100 // Process 100 traces at a time
+
+    init {
+        createIndexes()
+    }
+
+    /**
+     * Ensures that necessary indexes exist in Neo4j for efficient queries.
+     */
+    private fun createIndexes() {
+        logger.info("Ensuring Neo4j indexes are created...")
+        try {
+            neo4jDriver.session().use { session ->
+                session.executeWrite { tx ->
+                    tx.run("CREATE INDEX log_logId IF NOT EXISTS FOR (n:Log) ON (n.logId)").consume()
+                    tx.run("CREATE INDEX trace_traceId IF NOT EXISTS FOR (n:Trace) ON (n.traceId)").consume()
+                    tx.run("CREATE INDEX event_eventId IF NOT EXISTS FOR (n:Event) ON (n.eventId)").consume()
+                }
+            }
+            logger.info("Neo4j indexes are in place.")
+        } catch (e: Exception) {
+            logger.error("Failed to create Neo4j indexes. Performance may be degraded.", e)
+        }
+    }
 
     /**
      * Sanitize attributes to be Neo4j-compatible.
@@ -71,14 +92,15 @@ class XESLoader(
     }
 
     /**
-     * Save parsed XES log to Neo4j with relationships
+     * Save parsed XES log to Neo4j using efficient batch operations in separate transactions.
      */
     private fun saveXESLogToNeo4j(xesLog: XESLog): String {
-        logger.info("Saving XES log to Neo4j: ${xesLog.logNode.logId}")
+        val logId = xesLog.logNode.logId
+        logger.info("Saving XES log to Neo4j: $logId. Total traces: ${xesLog.traces.size}")
 
-        return neo4jDriver.session().use { session ->
-            session.writeTransaction { tx ->
-                // Create log node
+        // 1. Create Log node first in its own transaction
+        neo4jDriver.session().use { session ->
+            session.executeWrite { tx ->
                 val createLogQuery = """
                     CREATE (log:Log {
                         logId: ${'$'}logId,
@@ -87,141 +109,115 @@ class XESLoader(
                         updatedAt: ${'$'}updatedAt
                     })
                     SET log += ${'$'}attributes
-                    RETURN log.logId as logId
                 """
-
-                val logResult = tx.run(
+                tx.run(
                     createLogQuery,
                     mapOf(
-                        "logId" to xesLog.logNode.logId,
+                        "logId" to logId,
                         "name" to xesLog.logNode.name,
                         "createdAt" to xesLog.logNode.createdAt,
                         "updatedAt" to xesLog.logNode.updatedAt,
                         "attributes" to sanitizeAttributes(xesLog.logNode.attributes),
-                    ),
+                    )
+                ).consume()
+            }
+        }
+
+        // 2. Process traces in batches
+        val totalTraces = xesLog.traces.size
+        val totalBatches = (totalTraces + BATCH_SIZE - 1) / BATCH_SIZE
+        xesLog.traces.chunked(BATCH_SIZE).forEachIndexed { index, traceBatch ->
+            logger.info("Processing batch ${index + 1} / $totalBatches. Traces ${index * BATCH_SIZE + 1} to ${(index * BATCH_SIZE) + traceBatch.size}")
+
+            val tracesData = traceBatch.map { trace ->
+                mapOf(
+                    "traceId" to trace.traceNode.traceId,
+                    "caseId" to trace.traceNode.caseId,
+                    "createdAt" to trace.traceNode.createdAt,
+                    "attributes" to sanitizeAttributes(trace.traceNode.attributes)
                 )
+            }
 
-                val savedLogId = logResult.single().get("logId").asString()
-                logger.debug("Created log node: $savedLogId")
-
-                // Create traces and events with relationships
-                xesLog.traces.forEach { xesTrace ->
-                    createTraceWithEvents(tx, savedLogId, xesTrace)
+            val eventsData = traceBatch.flatMap { trace ->
+                trace.events.map { event ->
+                    mapOf(
+                        "traceId" to trace.traceNode.traceId,
+                        "eventId" to event.eventNode.eventId,
+                        "activity" to event.eventNode.activity,
+                        "timestamp" to event.eventNode.timestamp,
+                        "resource" to event.eventNode.resource,
+                        "lifecycle" to event.eventNode.lifecycle,
+                        "cost" to event.eventNode.cost,
+                        "createdAt" to event.eventNode.createdAt,
+                        "attributes" to sanitizeAttributes(event.eventNode.attributes)
+                    )
                 }
-
-                return@writeTransaction savedLogId
-            }
-        }
-    }
-
-    /**
-     * Create trace node with events and relationships
-     */
-    private fun createTraceWithEvents(tx: org.neo4j.driver.Transaction, logId: String, xesTrace: XESTrace) {
-        val trace = xesTrace.traceNode
-
-        // Create trace node and relationship to log
-        val createTraceQuery = """
-            MATCH (log:Log {logId: ${'$'}logId})
-            CREATE (trace:Trace {
-                traceId: ${'$'}traceId,
-                caseId: ${'$'}caseId,
-                createdAt: ${'$'}createdAt
-            })
-            SET trace += ${'$'}attributes
-            CREATE (log)-[:CONTAINS]->(trace)
-            RETURN trace.traceId as traceId
-        """
-
-        val traceResult = tx.run(
-            createTraceQuery,
-            mapOf(
-                "logId" to logId,
-                "traceId" to trace.traceId,
-                "caseId" to trace.caseId,
-                "createdAt" to trace.createdAt,
-                "attributes" to sanitizeAttributes(trace.attributes),
-            ),
-        )
-
-        val savedTraceId = traceResult.single().get("traceId").asString()
-        logger.debug("Created trace node: $savedTraceId")
-
-        // Create events with relationships
-        var previousEventId: String? = null
-
-        xesTrace.events.forEachIndexed { index, xesEvent ->
-            val eventId = createEvent(tx, savedTraceId, xesEvent.eventNode)
-
-            // Create FOLLOWS relationship between consecutive events
-            if (previousEventId != null) {
-                createFollowsRelationship(tx, previousEventId!!, eventId)
             }
 
-            previousEventId = eventId
+            val followsData = traceBatch.flatMap { trace ->
+                if (trace.events.size > 1) {
+                    trace.events.sortedBy { it.eventNode.timestamp }.windowed(2).map { (from, to) ->
+                        mapOf("fromEventId" to from.eventNode.eventId, "toEventId" to to.eventNode.eventId)
+                    }
+                } else {
+                    emptyList()
+                }
+            }
+
+            neo4jDriver.session().use { session ->
+                session.executeWrite { tx ->
+                    // Batch create Trace nodes and CONTAINS relationships
+                    if (tracesData.isNotEmpty()) {
+                        val createTracesQuery = """
+                        UNWIND ${'$'}traces as traceProps
+                        MATCH (log:Log {logId: ${'$'}logId})
+                        CREATE (trace:Trace {
+                            traceId: traceProps.traceId,
+                            caseId: traceProps.caseId,
+                            createdAt: traceProps.createdAt
+                        })
+                        SET trace += traceProps.attributes
+                        CREATE (log)-[:CONTAINS]->(trace)
+                    """
+                        tx.run(createTracesQuery, mapOf("logId" to logId, "traces" to tracesData)).consume()
+                    }
+
+                    // Batch create Event nodes and HAS_EVENT relationships
+                    if (eventsData.isNotEmpty()) {
+                        val createEventsQuery = """
+                        UNWIND ${'$'}events as eventProps
+                        MATCH (trace:Trace {traceId: eventProps.traceId})
+                        CREATE (event:Event {
+                            eventId: eventProps.eventId,
+                            activity: eventProps.activity,
+                            timestamp: eventProps.timestamp,
+                            resource: eventProps.resource,
+                            lifecycle: eventProps.lifecycle,
+                            cost: eventProps.cost,
+                            createdAt: eventProps.createdAt
+                        })
+                        SET event += eventProps.attributes
+                        CREATE (trace)-[:HAS_EVENT]->(event)
+                    """
+                        tx.run(createEventsQuery, mapOf("events" to eventsData)).consume()
+                    }
+
+                    // Batch create FOLLOWS relationships
+                    if (followsData.isNotEmpty()) {
+                        val createFollowsQuery = """
+                        UNWIND ${'$'}follows as followPair
+                        MATCH (from:Event {eventId: followPair.fromEventId})
+                        MATCH (to:Event {eventId: followPair.toEventId})
+                        CREATE (from)-[:FOLLOWS]->(to)
+                    """
+                        tx.run(createFollowsQuery, mapOf("follows" to followsData)).consume()
+                    }
+                }
+            }
         }
-    }
 
-    /**
-     * Create event node with relationship to trace
-     */
-    private fun createEvent(tx: org.neo4j.driver.Transaction, traceId: String, event: EventNode): String {
-        val createEventQuery = """
-            MATCH (trace:Trace {traceId: ${'$'}traceId})
-            CREATE (event:Event {
-                eventId: ${'$'}eventId,
-                activity: ${'$'}activity,
-                timestamp: ${'$'}timestamp,
-                resource: ${'$'}resource,
-                lifecycle: ${'$'}lifecycle,
-                cost: ${'$'}cost,
-                createdAt: ${'$'}createdAt
-            })
-            SET event += ${'$'}attributes
-            CREATE (trace)-[:HAS_EVENT]->(event)
-            RETURN event.eventId as eventId
-        """
-
-        val eventResult = tx.run(
-            createEventQuery,
-            mapOf(
-                "traceId" to traceId,
-                "eventId" to event.eventId,
-                "activity" to event.activity,
-                "timestamp" to event.timestamp,
-                "resource" to event.resource,
-                "lifecycle" to event.lifecycle,
-                "cost" to event.cost,
-                "createdAt" to event.createdAt,
-                "attributes" to sanitizeAttributes(event.attributes),
-            ),
-        )
-
-        val savedEventId = eventResult.single().get("eventId").asString()
-        logger.debug("Created event node: $savedEventId")
-
-        return savedEventId
-    }
-
-    /**
-     * Create FOLLOWS relationship between events
-     */
-    private fun createFollowsRelationship(tx: org.neo4j.driver.Transaction, fromEventId: String, toEventId: String) {
-        val createFollowsQuery = """
-            MATCH (from:Event {eventId: ${'$'}fromEventId})
-            MATCH (to:Event {eventId: ${'$'}toEventId})
-            CREATE (from)-[:FOLLOWS]->(to)
-        """
-
-        tx.run(
-            createFollowsQuery,
-            mapOf(
-                "fromEventId" to fromEventId,
-                "toEventId" to toEventId,
-            ),
-        )
-
-        logger.debug("Created FOLLOWS relationship: $fromEventId -> $toEventId")
+        logger.info("Finished saving XES log to Neo4j: $logId")
+        return logId
     }
 
     /**

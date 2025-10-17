@@ -173,7 +173,8 @@
             </div>
             <button id="uploadButton">Upload</button>
             <button id="loadSampleButton" class="secondary">Load Hospital Log</button>
-            <div class="output-block">
+            <button id="loadSampleButton2" class="secondary">Load Sample Process Log</button>
+          <div class="output-block">
                 <pre id="uploadOutput">...</pre>
             </div>
         </div>
@@ -310,6 +311,15 @@
         });
         await apiCall(`/logs/load-sample?${params}`, { method: 'POST' }, uploadOutput);
         refreshLogs();
+    });
+
+    document.getElementById('loadSampleButton2').addEventListener('click', async () => {
+      const params = new URLSearchParams({
+        resourcePath: 'logs/sample_process.xes',
+        logId: 'sample_process'
+      });
+      await apiCall(`/logs/load-sample?${params}`, { method: 'POST' }, uploadOutput);
+      refreshLogs();
     });
 
 

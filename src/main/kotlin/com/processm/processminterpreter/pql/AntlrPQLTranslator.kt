@@ -1,0 +1,78 @@
+package com.processm.processminterpreter.pql
+
+import PQLLexer
+import PQLParser
+import com.processm.processminterpreter.pql.visitor.PQLErrorListener
+import com.processm.processminterpreter.pql.visitor.PQLToCypherVisitor
+import org.antlr.v4.runtime.CharStreams
+import org.antlr.v4.runtime.CommonTokenStream
+import org.slf4j.LoggerFactory
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.stereotype.Component
+
+/**
+ * ANTLR-based PQL to Cypher translator
+ *
+ * This is the modern, production-ready implementation using ANTLR4 parser.
+ * It provides better error messages, easier maintenance, and extensibility compared to the regex-based approach.
+ *
+ * Activated by default, or explicitly with: pql.parser.type=antlr
+ */
+@Component
+@ConditionalOnProperty(name = ["pql.parser.type"], havingValue = "antlr", matchIfMissing = true)
+class AntlrPQLTranslator : PQLTranslator {
+
+    private val logger = LoggerFactory.getLogger(AntlrPQLTranslator::class.java)
+
+    /**
+     * Translate PQL query to Cypher query using ANTLR parser
+     *
+     * @param pqlQuery The PQL query string
+     * @param logId Optional log ID to filter results
+     * @return CypherQuery object containing the Cypher query string and parameters
+     * @throws IllegalArgumentException if the PQL query has syntax errors
+     */
+    override fun translateToCypher(pqlQuery: String, logId: String?): CypherQuery {
+        logger.debug("Translating PQL query using ANTLR: $pqlQuery")
+
+        try {
+            // Step 1: Create input stream from PQL query string
+            val input = CharStreams.fromString(pqlQuery)
+
+            // Step 2: Create lexer (tokenizer)
+            val lexer = PQLLexer(input)
+
+            // Step 3: Create token stream
+            val tokens = CommonTokenStream(lexer)
+
+            // Step 4: Create parser
+            val parser = PQLParser(tokens)
+
+            // Step 5: Add custom error listener for better error messages
+            val errorListener = PQLErrorListener()
+            parser.removeErrorListeners() // Remove default console error listener
+            parser.addErrorListener(errorListener)
+
+            // Step 6: Parse the query and build AST (Abstract Syntax Tree)
+            val tree = parser.query()
+
+            // Step 7: Check for syntax errors
+            errorListener.throwIfErrors()
+
+            // Step 8: Visit the AST and generate Cypher query
+            val visitor = PQLToCypherVisitor(logId)
+            val result = visitor.visit(tree) as CypherQuery
+
+            logger.debug("Generated Cypher: ${result.query}")
+            logger.debug("Parameters: ${result.parameters}")
+
+            return result
+        } catch (e: IllegalArgumentException) {
+            logger.error("PQL parsing error: ${e.message}")
+            throw e
+        } catch (e: Exception) {
+            logger.error("Unexpected error during PQL translation", e)
+            throw IllegalArgumentException("Failed to parse PQL query: ${e.message}", e)
+        }
+    }
+}

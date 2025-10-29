@@ -4,6 +4,7 @@ plugins {
     id("org.springframework.boot") version "3.5.3"
     id("io.spring.dependency-management") version "1.1.7"
     id("com.diffplug.spotless") version "6.19.0"
+    id("antlr")
 }
 
 group = "com.processm"
@@ -41,8 +42,9 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.16.1")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.16.1")
 
-    // PQL parsing dependencies (will be added when integrating with ProcessM)
-    // implementation("org.antlr:antlr4-runtime:4.13.1")
+    // PQL parsing dependencies - ANTLR4
+    antlr("org.antlr:antlr4:4.13.1")
+    implementation("org.antlr:antlr4-runtime:4.13.1")
 
     compileOnly("org.projectlombok:lombok")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
@@ -74,6 +76,27 @@ spotless {
         target("*.gradle.kts")
         ktlint()
     }
+}
+
+tasks.generateGrammarSource {
+    arguments = arguments + listOf("-visitor", "-no-listener")
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs("build/generated-src/antlr/main")
+        }
+    }
+}
+
+// Ensure ANTLR generates parser before Kotlin compilation
+tasks.named("compileKotlin") {
+    dependsOn("generateGrammarSource")
+}
+
+tasks.named("compileTestKotlin") {
+    dependsOn("generateTestGrammarSource")
 }
 
 tasks.withType<Test> {

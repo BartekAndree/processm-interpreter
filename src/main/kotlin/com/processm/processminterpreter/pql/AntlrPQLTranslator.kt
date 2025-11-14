@@ -1,9 +1,9 @@
 package com.processm.processminterpreter.pql
 
-import PQLLexer
-import PQLParser
+import QLLexer
+import QLParser
 import com.processm.processminterpreter.pql.visitor.PQLErrorListener
-import com.processm.processminterpreter.pql.visitor.PQLToCypherVisitor
+import com.processm.processminterpreter.pql.visitor.QLToCypherVisitor
 import org.antlr.v4.runtime.CharStreams
 import org.antlr.v4.runtime.CommonTokenStream
 import org.slf4j.LoggerFactory
@@ -40,13 +40,13 @@ class AntlrPQLTranslator : PQLTranslator {
             val input = CharStreams.fromString(pqlQuery)
 
             // Step 2: Create lexer (tokenizer)
-            val lexer = PQLLexer(input)
+            val lexer = QLLexer(input)
 
             // Step 3: Create token stream
             val tokens = CommonTokenStream(lexer)
 
             // Step 4: Create parser
-            val parser = PQLParser(tokens)
+            val parser = QLParser(tokens)
 
             // Step 5: Add custom error listener for better error messages
             val errorListener = PQLErrorListener()
@@ -60,7 +60,7 @@ class AntlrPQLTranslator : PQLTranslator {
             errorListener.throwIfErrors()
 
             // Step 8: Visit the AST and generate Cypher query
-            val visitor = PQLToCypherVisitor(logId)
+            val visitor = QLToCypherVisitor(logId)
             val result = visitor.visit(tree) as CypherQuery
 
             logger.debug("Generated Cypher: ${result.query}")

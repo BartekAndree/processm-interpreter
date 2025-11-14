@@ -492,7 +492,7 @@
             </div>
             <div class="form-group">
                 <label for="pqlQueryText">PQL Query</label>
-                <textarea id="pqlQueryText">SELECT * FROM event</textarea>
+                <textarea id="pqlQueryText">select event:* limit 10</textarea>
             </div>
             <button id="pqlButton">Run Query</button>
 
@@ -630,37 +630,37 @@
     const pqlQuerySelect = document.getElementById('pqlQuerySelect');
 
     const sampleQueries = {
-        // Basic queries
-        "Show all events": "SELECT * FROM event LIMIT 10",
-        "Show all traces": "SELECT * FROM trace LIMIT 10",
-        "Show specific fields": "SELECT activity, timestamp, org_group FROM event LIMIT 20",
+        // Basic queries (ProcessM PQL syntax - lowercase keywords, no FROM clause)
+        "Show all events": "select event:* limit 10",
+        "Show all traces": "select trace:* limit 10",
+        "Show specific fields": "select event:activity, event:timestamp, event:org_group limit 20",
 
         // Simple filters
-        "Events by department": "SELECT activity, timestamp FROM event WHERE org_group = 'Radiotherapy' LIMIT 20",
-        "Events with LIKE": "SELECT activity, org_group FROM event WHERE activity LIKE 'vervolgconsult' LIMIT 20",
-        "Events in time range": "SELECT activity, timestamp FROM event WHERE timestamp BETWEEN '2005-01-01' AND '2005-12-31' LIMIT 20",
+        "Events by department": "select event:activity, event:timestamp where event:org_group = 'Radiotherapy' limit 20",
+        "Events with LIKE": "select event:activity, event:org_group where event:activity like 'vervolgconsult' limit 20",
+        "Events in time range": "select event:activity, event:timestamp where event:timestamp > 'D2005-02-01' and event:timestamp < 'D2005-06-30' limit 20",
 
         // Advanced filters
-        "Multiple departments": "SELECT org_group, activity FROM event WHERE org_group IN ('Radiotherapy', 'Obstetrics & Gynaecology clinic', 'Nuclear Medicine') LIMIT 50",
-        "Complex conditions": "SELECT activity, org_group, timestamp FROM event WHERE (org_group = 'Radiotherapy' OR org_group LIKE 'Obstetrics') AND timestamp > '2005-01-01' LIMIT 30",
+        "Multiple departments": "select event:org_group, event:activity where event:org_group in ('Radiotherapy', 'Obstetrics & Gynaecology clinic', 'Nuclear Medicine') limit 50",
+        "Complex conditions": "select event:activity, event:org_group, event:timestamp where (event:org_group = 'Radiotherapy' or event:org_group like 'Obstetrics') and event:timestamp > 'D2005-02-01' limit 30",
 
         // Aggregations
-        "Count all events": "SELECT COUNT(*) as total_events FROM event",
-        "Events per department": "SELECT org_group, COUNT(*) as count FROM event GROUP BY org_group ORDER BY count DESC",
-        "Top 10 activities": "SELECT activity, COUNT(*) as count FROM event GROUP BY activity ORDER BY count DESC LIMIT 10",
-        "Events per section": "SELECT Section, COUNT(*) as count FROM event GROUP BY Section ORDER BY count DESC",
+        "Count all events": "select count(event:id)",
+        "Events per department": "select event:org_group, count(event:id) group by event:org_group order by count(event:id) desc",
+        "Top 10 activities": "select event:activity, count(event:id) group by event:activity order by count(event:id) desc limit 10",
+        "Events per section": "select event:Section, count(event:id) group by event:Section order by count(event:id) desc",
 
-        // DISTINCT queries
-        "All departments": "SELECT DISTINCT org_group FROM event ORDER BY org_group ASC",
-        "All activity types": "SELECT DISTINCT activity FROM event ORDER BY activity ASC",
+        // Simple selections
+        "All departments": "select event:org_group group by event:org_group order by event:org_group asc",
+        "All activity types": "select event:activity group by event:activity order by event:activity asc",
 
         // Hospital-specific analysis
-        "Radiotherapy workload": "SELECT activity, COUNT(*) as count FROM event WHERE org_group = 'Radiotherapy' GROUP BY activity ORDER BY count DESC",
-        "Department comparison": "SELECT org_group, COUNT(*) as total_events FROM event WHERE org_group IN ('Radiotherapy', 'Obstetrics & Gynaecology clinic', 'Nuclear Medicine', 'Cardiology') GROUP BY org_group ORDER BY total_events DESC",
-        "Consultation patterns": "SELECT org_group, COUNT(*) as consultations FROM event WHERE activity LIKE 'consult' GROUP BY org_group ORDER BY consultations DESC",
-        "Activity by section": "SELECT Section, activity, COUNT(*) as count FROM event WHERE Section IS NOT NULL GROUP BY Section, activity ORDER BY Section, count DESC LIMIT 30",
-        "Recent events": "SELECT activity, org_group, timestamp FROM event ORDER BY timestamp DESC LIMIT 20",
-        "Complex analysis": "SELECT org_group, activity, COUNT(*) as count FROM event WHERE timestamp > '2006-01-01' AND org_group IN ('Radiotherapy', 'Obstetrics & Gynaecology clinic') GROUP BY org_group, activity ORDER BY count DESC LIMIT 20"
+        "Radiotherapy workload": "select event:activity, count(event:id) where event:org_group = 'Radiotherapy' group by event:activity order by count(event:id) desc",
+        "Department comparison": "select event:org_group, count(event:id) where event:org_group in ('Radiotherapy', 'Obstetrics & Gynaecology clinic', 'Nuclear Medicine', 'Cardiology') group by event:org_group order by count(event:id) desc",
+        "Consultation patterns": "select event:org_group, count(event:id) where event:activity like 'consult' group by event:org_group order by count(event:id) desc",
+        "Activity by section": "select event:Section, event:activity, count(event:id) where event:Section is not null group by event:Section, event:activity order by event:Section, count(event:id) desc limit 30",
+        "Recent events": "select event:activity, event:org_group, event:timestamp order by event:timestamp desc limit 20",
+        "Complex analysis": "select event:org_group, event:activity, count(event:id) where event:timestamp > 'D2005-01-01' and event:org_group in ('Radiotherapy', 'Obstetrics & Gynaecology clinic') group by event:org_group, event:activity order by count(event:id) desc limit 20"
     };
 
     function populateSampleQueries() {

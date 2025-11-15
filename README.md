@@ -8,6 +8,7 @@ System składa się z następujących komponentów:
 - **Neo4j Database** - graf baza danych do przechowywania logów XES
 - **Spring Boot Application** - REST API dla operacji CRUD i wykonywania zapytań PQL
 - **PQL Parser** - parser języka zapytań PQL (integracja z ProcessM)
+- **Query Model** - obiektowa reprezentacja zapytań PQL → Cypher (🆕 **Dokumentacja:** [QUERY_MODEL_IMPLEMENTATION.md](QUERY_MODEL_IMPLEMENTATION.md))
 - **XES Loader** - moduł do ładowania plików XES do Neo4j
 
 ## Model danych Neo4j
@@ -195,10 +196,13 @@ MATCH (n) DETACH DELETE n;  # Usunięcie wszystkich danych (UWAGA!)
 - [ ] Optymalizacja wydajności
 - [ ] Testy wydajnościowe
 
-### Faza 3 - Integracja z ProcessM
-- [ ] Integracja parsera PQL z ProcessM
-- [ ] Kompatybilność z testami ProcessM
-- [ ] Dokumentacja API
+### Faza 3 - Integracja z ProcessM ✅
+- [x] Integracja parsera PQL z ProcessM (ANTLR Grammar)
+- [x] Query Model - pełna reprezentacja obiektowa zapytań
+- [x] Kompatybilność z ProcessM (Expression hierarchy, validation)
+- [x] Cypher translation pipeline (Query → Cypher)
+- [x] Dokumentacja implementacji ([QUERY_MODEL_IMPLEMENTATION.md](QUERY_MODEL_IMPLEMENTATION.md))
+- [x] Wszystkie testy przechodzą (182/182) ✅
 
 ## Troubleshooting
 

@@ -1,0 +1,230 @@
+package com.processm.processminterpreter.pql.model
+
+/**
+ * Represents an attribute reference in a PQL query.
+ *
+ * Attributes can have:
+ * - Scope prefix: "e:name", "t:name", "l:name"
+ * - Hoisting prefix: "^e:name" (raises scope by one), "^^e:name" (raises by two)
+ * - No prefix: "name" (defaults to EVENT scope)
+ * - Classifier: "c:businesscase" or "classifier:activity"
+ * - Multi-part names: "org:group" (XES extension:attribute format)
+ *
+ * Examples:
+ * - "e:name" → EVENT scope, standard attribute (concept:name)
+ * - "^e:name" → TRACE scope (hoisted from EVENT)
+ * - "^^e:name" → LOG scope (hoisted twice from EVENT)
+ * - "t:timestamp" → TRACE scope, standard attribute (time:timestamp)
+ * - "e:org:group" → EVENT scope, standard attribute (org:group)
+ * - "e:customAttribute" → EVENT scope, custom (non-standard) attribute
+ * - "c:businesscase" → Classifier attribute
+ *
+ * Based on ProcessM: https://github.com/ProcessMPUT/processm
+ */
+class Attribute(
+    attributeStr: String,
+    override val line: Int = -1,
+    override val charPositionInLine: Int = -1
+) : Expression(line, charPositionInLine) {
+
+    // Regex to parse: [^]* [scope:]name
+    // Groups: (hoisting) (scope:) (name)
+    // Using \S (non-whitespace) to prevent spaces while allowing Unicode
+    private val regex = Regex("^(\\^*)(?:([a-zA-Z]+):)?(\\S+)$")
+    private val match = regex.find(attributeStr)
+        ?: throw PQLSyntaxException(
+            line,
+            charPositionInLine,
+            "Invalid attribute syntax: $attributeStr"
+        )
+
+    /**
+     * Hoisting prefix: "", "^", or "^^"
+     * Each ^ raises the scope by one level (EVENT → TRACE → LOG)
+     */
+    val hoistingPrefix: String = match.groupValues[1]
+
+    /**
+     * The attribute name (after scope prefix, if any).
+     *
+     * Examples:
+     * - "e:name" → "name"
+     * - "e:org:group" → "org:group"
+     * - "customAttr" → "customAttr"
+     */
+    val name: String = match.groupValues[3]
+
+    /**
+     * Base scope (before hoisting is applied).
+     * null if no scope prefix was specified.
+     *
+     * Examples:
+     * - "e:name" → EVENT
+     * - "t:timestamp" → TRACE
+     * - "name" → null (will default to EVENT)
+     */
+    private val baseScope: Scope? = match.groupValues[2]
+        .takeIf { it.isNotEmpty() }
+        ?.let { Scope.parse(it) }
+
+    /**
+     * Actual scope after applying hoisting.
+     *
+     * Process:
+     * 1. Start with baseScope (or EVENT if not specified)
+     * 2. Apply each ^ by moving up the hierarchy
+     * 3. Validate we don't hoist beyond LOG
+     *
+     * Examples:
+     * - "e:name" → EVENT
+     * - "^e:name" → TRACE (EVENT.upper)
+     * - "^^e:name" → LOG (EVENT.upper.upper)
+     * - "^t:name" → LOG (TRACE.upper)
+     * - "^^^e:name" → ERROR (would go beyond LOG)
+     * - "^l:name" → ERROR (LOG has no parent)
+     */
+    override val scope: Scope = run {
+        val initial = baseScope ?: Scope.EVENT
+
+        var currentScope = initial
+        for (i in hoistingPrefix.indices) {
+            currentScope = currentScope.upper
+                ?: throw InvalidScopeHoistingException(
+                    "Cannot hoist scope '$initial' beyond LOG (hoisting: '$hoistingPrefix')"
+                )
+        }
+
+        currentScope
+    }
+
+    /**
+     * Is this a standard XES attribute?
+     *
+     * Standard attributes can be:
+     * - Shorthand names (e.g., "name", "timestamp", "group")
+     * - Full XES names (e.g., "org:group", "cost:total")
+     *
+     * Examples:
+     * - "e:name" → true (concept:name shorthand)
+     * - "e:timestamp" → true (time:timestamp shorthand)
+     * - "e:org:group" → true (org:group full XES name)
+     * - "e:customAttr" → false
+     */
+    val isStandard: Boolean = run {
+        // Use base scope (before hoisting) to check if attribute is standard
+        // For example, ^^e:timestamp should check if "timestamp" is standard for EVENT, not LOG
+        val scopeToCheck = baseScope ?: Scope.EVENT
+
+        // First check if it's a shorthand
+        if (StandardAttributes.isStandard(scopeToCheck, name)) {
+            return@run true
+        }
+
+        // Check if it's a full XES standard name (like org:group, cost:total)
+        // These appear in ATTRIBUTE_TYPES map
+        StandardAttributes.ATTRIBUTE_TYPES.containsKey(name)
+    }
+
+    /**
+     * Is this a classifier attribute?
+     *
+     * Classifiers start with "c:" or "classifier:"
+     *
+     * Examples:
+     * - "c:businesscase" → true
+     * - "classifier:activity_resource" → true
+     * - "e:name" → false
+     */
+    val isClassifier: Boolean by lazy {
+        StandardAttributes.isClassifier(name)
+    }
+
+    /**
+     * The XES standard name for this attribute (if it's a standard attribute).
+     *
+     * Examples:
+     * - "e:name" → "concept:name"
+     * - "e:timestamp" → "time:timestamp"
+     * - "e:group" → "org:group"
+     * - "e:org:group" → "org:group" (already full XES name)
+     * - "e:customAttr" → "" (not standard)
+     */
+    val standardName: String = run {
+        if (!isStandard) return@run ""
+
+        // Use base scope (before hoisting) for mapping
+        val scopeToCheck = baseScope ?: Scope.EVENT
+
+        // Try to get from shorthand mapping first
+        StandardAttributes.getStandardName(scopeToCheck, name)?.let { return@run it }
+
+        // If not found, check if name itself is already a full XES name
+        if (StandardAttributes.ATTRIBUTE_TYPES.containsKey(name)) {
+            return@run name
+        }
+
+        ""
+    }
+
+    /**
+     * The data type of this attribute.
+     *
+     * - Standard attributes have known types (from StandardAttributes)
+     * - Custom attributes have UNKNOWN type
+     */
+    override val type: Type
+        get() = if (isStandard && standardName.isNotEmpty()) {
+            StandardAttributes.getType(standardName)
+        } else {
+            Type.UNKNOWN
+        }
+
+    /**
+     * Get the Neo4j property name for this attribute.
+     *
+     * For standard attributes:
+     * - Uses StandardAttributes mappings
+     *
+     * For custom attributes:
+     * - Sanitizes colons to underscores (org:group → org_group)
+     *
+     * @return the Neo4j property name
+     */
+    fun toNeo4jProperty(): String {
+        return if (isStandard) {
+            StandardAttributes.getNeo4jPropertyFromShorthand(scope, name)
+                ?: name.replace(":", "_")
+        } else {
+            name.replace(":", "_")
+        }
+    }
+
+    /**
+     * String representation of this attribute.
+     *
+     * Examples:
+     * - "e:name" → "e:name"
+     * - "^e:name" → "^e:name"
+     * - "^^e:timestamp" → "^^e:timestamp"
+     */
+    override fun toString(): String {
+        val scopePrefix = baseScope?.shortName?.let { "$it:" } ?: ""
+        return "$hoistingPrefix$scopePrefix$name"
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is Attribute) return false
+
+        return hoistingPrefix == other.hoistingPrefix &&
+            baseScope == other.baseScope &&
+            name == other.name
+    }
+
+    override fun hashCode(): Int {
+        var result = hoistingPrefix.hashCode()
+        result = 31 * result + (baseScope?.hashCode() ?: 0)
+        result = 31 * result + name.hashCode()
+        return result
+    }
+}

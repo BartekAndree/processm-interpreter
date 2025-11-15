@@ -3,6 +3,9 @@ package com.processm.processminterpreter.pql.visitor
 import QLParser
 import QLParserBaseVisitor
 import com.processm.processminterpreter.pql.CypherQuery
+import com.processm.processminterpreter.pql.StandardAttributeMapper
+import com.processm.processminterpreter.pql.StandardAttributeMapper.Scope
+import com.processm.processminterpreter.pql.model.Query
 import org.slf4j.LoggerFactory
 
 /**
@@ -34,9 +37,9 @@ class QLToCypherVisitor(
     private var currentScope: Scope = Scope.EVENT
     private val scopeStack = mutableListOf<Scope>()
 
-    enum class Scope {
-        LOG, TRACE, EVENT
-    }
+    // Track all scopes actually used in the query (after hoisting)
+    // This is needed to build the correct MATCH clause
+    private val usedScopes = mutableSetOf<Scope>()
 
     // ========================================
     // ENTRY POINT
@@ -45,15 +48,41 @@ class QLToCypherVisitor(
     /**
      * Entry point - visits the root query node
      * query: read_query EOF | delete_query EOF
+     *
+     * New approach: Use QueryBuilder to parse into Query object first,
+     * then translate Query object to Cypher.
      */
     override fun visitQuery(ctx: QLParser.QueryContext): CypherQuery {
         logger.debug("Visiting query: ${ctx.text}")
 
-        return when {
-            ctx.read_query() != null -> visitRead_query(ctx.read_query()) as CypherQuery
-            ctx.delete_query() != null -> visitDelete_query(ctx.delete_query()) as CypherQuery
-            else -> throw IllegalStateException("Unknown query type")
-        }
+        // Step 1: Use QueryBuilder to parse into Query object
+        val queryBuilder = QueryBuilder()
+        val query = queryBuilder.build(ctx, ctx.text)
+
+        // Step 2: Translate Query object to Cypher
+        return translateQueryToCypher(query)
+    }
+
+    // ========================================
+    // DEPRECATED: OLD VISITOR CODE - NOT USED
+    // ========================================
+    // The code below (lines 69-721) is deprecated and no longer used.
+    // It was the old ANTLR visitor-based translation approach, now replaced
+    // by the Query model approach (translateQueryToCypher and related methods).
+    // This code can be safely removed in the future.
+    // ========================================
+
+    /**
+     * Legacy entry point methods - kept for backward compatibility
+     * and internal use for expression translation.
+     */
+    @Deprecated("Not used - replaced by Query model approach")
+    private fun visitRead_query_legacy(ctx: QLParser.Read_queryContext): CypherQuery {
+        return visitRead_query(ctx) as CypherQuery
+    }
+
+    private fun visitDelete_query_legacy(ctx: QLParser.Delete_queryContext): CypherQuery {
+        return visitDelete_query(ctx) as CypherQuery
     }
 
     // ========================================
@@ -65,6 +94,9 @@ class QLToCypherVisitor(
      */
     override fun visitRead_query(ctx: QLParser.Read_queryContext): CypherQuery {
         logger.debug("Visiting read_query")
+
+        // Clear used scopes from any previous query
+        usedScopes.clear()
 
         // Determine scope from SELECT clause
         val selectCtx = ctx.select()
@@ -525,36 +557,71 @@ class QLToCypherVisitor(
     }
 
     /**
-     * Translate field reference with scope prefix
+     * Translate field reference with scope prefix and hoisting support
      *
      * Examples:
-     * - event:activity -> event.activity
-     * - e:activity -> event.activity
-     * - activity -> event.activity (if current scope is event)
-     * - trace:caseId -> trace.caseId
-     * - ^trace:caseId -> trace.caseId (hoisting)
+     * - event:activity → event.activity
+     * - e:name → event.activity (shorthand mapping)
+     * - e:group → event.org_group (shorthand mapping)
+     * - ^e:name → trace.concept_name (hoisting: event → trace)
+     * - ^^e:name → log.concept_name (double hoisting: event → log)
+     * - activity → event.activity (no scope, uses current scope)
      */
     private fun translateFieldReference(fieldRef: String): String {
-        // Remove brackets if present: [event:activity] -> event:activity
+        // Remove brackets if present: [event:activity] → event:activity
         val cleanRef = fieldRef.trim('[', ']')
 
+        // Extract hoisting prefix (^, ^^, etc.)
+        val hoistingPrefix = cleanRef.takeWhile { it == '^' }
+        val refWithoutHoisting = cleanRef.drop(hoistingPrefix.length)
+
         // Check if has scope prefix
-        if (cleanRef.contains(":")) {
-            val parts = cleanRef.split(":")
-            val scopePart = parts[0].trimStart('^') // Remove hoisting markers
-            val fieldPart = parts.drop(1).joinToString(":")
+        if (refWithoutHoisting.contains(":")) {
+            val parts = refWithoutHoisting.split(":", limit = 2)
+            val scopePart = parts[0]
+            val fieldPart = parts[1]
 
-            val nodeLabel = when (scopePart.lowercase()) {
-                "event", "e" -> "event"
-                "trace", "t" -> "trace"
-                "log", "l" -> "log"
-                else -> scopeToNodeLabel(currentScope)
-            }
+            // Parse base scope
+            val baseScope =
+                try {
+                    Scope.parse(scopePart)
+                } catch (e: IllegalArgumentException) {
+                    // Not a valid scope prefix - treat as field name
+                    return translateField(cleanRef, scopeToNodeLabel(currentScope))
+                }
 
-            return translateField(fieldPart, nodeLabel)
+            // Apply hoisting
+            val effectiveScope =
+                if (hoistingPrefix.isNotEmpty()) {
+                    StandardAttributeMapper.applyHoisting(baseScope, hoistingPrefix)
+                } else {
+                    baseScope
+                }
+
+            // Track that this scope is used in the query
+            usedScopes.add(effectiveScope)
+
+            // Translate to Neo4j property
+            val neo4jProperty = StandardAttributeMapper.translateToNeo4jProperty(fieldPart, effectiveScope)
+            val nodeLabel = scopeToNodeLabel(effectiveScope)
+
+            return "$nodeLabel.$neo4jProperty"
         } else {
             // No scope prefix - use current scope
-            return translateField(cleanRef, scopeToNodeLabel(currentScope))
+            val effectiveScope =
+                if (hoistingPrefix.isNotEmpty()) {
+                    StandardAttributeMapper.applyHoisting(currentScope, hoistingPrefix)
+                } else {
+                    currentScope
+                }
+
+            // Track that this scope is used in the query
+            usedScopes.add(effectiveScope)
+
+            val neo4jProperty = StandardAttributeMapper.translateToNeo4jProperty(refWithoutHoisting, effectiveScope)
+            val nodeLabel = scopeToNodeLabel(effectiveScope)
+
+            return "$nodeLabel.$neo4jProperty"
         }
     }
 
@@ -566,20 +633,25 @@ class QLToCypherVisitor(
         }
     }
 
-    private fun translateField(field: String, nodeLabel: String): String {
-        // Handle special fields
-        return when (field.lowercase()) {
-            "id" -> "$nodeLabel.id"
-            "name" -> "$nodeLabel.name"
-            else -> {
-                // Check if field contains : (nested namespace like concept:name)
-                if (field.contains(":")) {
-                    "$nodeLabel['$field']" // Bracket notation for namespaced fields
-                } else {
-                    "$nodeLabel.$field"
-                }
+    /**
+     * Legacy translateField - now delegates to StandardAttributeMapper
+     * Kept for backward compatibility
+     */
+    private fun translateField(
+        field: String,
+        nodeLabel: String,
+    ): String {
+        // Determine scope from nodeLabel
+        val scope =
+            when (nodeLabel) {
+                "log" -> Scope.LOG
+                "trace" -> Scope.TRACE
+                "event" -> Scope.EVENT
+                else -> Scope.EVENT
             }
-        }
+
+        val neo4jProperty = StandardAttributeMapper.translateToNeo4jProperty(field, scope)
+        return "$nodeLabel.$neo4jProperty"
     }
 
     // ========================================
@@ -647,6 +719,507 @@ class QLToCypherVisitor(
         return ctx.NUMBER().text.toInt()
     }
 
+    // ========================================
+    // QUERY OBJECT TO CYPHER TRANSLATION
+    // ========================================
+
+    /**
+     * Translate a Query object to Cypher.
+     *
+     * This is the new entry point that works with the Query model instead of
+     * directly visiting the parse tree.
+     */
+    private fun translateQueryToCypher(query: Query): CypherQuery {
+        // Clear state
+        usedScopes.clear()
+        parameters.clear()
+        paramCounter = 0
+
+        // Determine if this is SELECT or DELETE
+        return if (query.deleteScope != null) {
+            translateDeleteQuery(query)
+        } else {
+            translateSelectQuery(query)
+        }
+    }
+
+    /**
+     * Translate SELECT query from Query object to Cypher.
+     */
+    private fun translateSelectQuery(query: Query): CypherQuery {
+        val cypher = StringBuilder()
+
+        // Determine primary scope (scope with lowest ordinal = highest priority)
+        val primaryScope = determinePrimaryScope(query)
+        val mappedScope = mapScope(primaryScope)
+        currentScope = mappedScope
+
+        // Build MATCH clause
+        cypher.append(buildMatchClause(mappedScope))
+
+        // Build WHERE clause
+        val whereClause = buildWhereClauseFromQuery(query)
+        if (whereClause != null || logId != null) {
+            cypher.append(" WHERE ")
+            val conditions = mutableListOf<String>()
+
+            if (logId != null) {
+                conditions.add("log.logId = \$logId")
+                parameters["logId"] = logId
+            }
+
+            if (whereClause != null) {
+                conditions.add(whereClause)
+            }
+
+            cypher.append(conditions.joinToString(" AND "))
+        }
+
+        // Build RETURN clause
+        cypher.append(" RETURN ")
+        val returnClause = buildReturnClauseFromQuery(query)
+        cypher.append(returnClause)
+
+        // Build ORDER BY clause
+        val orderByClause = buildOrderByClauseFromQuery(query)
+        if (orderByClause != null && orderByClause.isNotEmpty()) {
+            cypher.append(" ORDER BY ")
+            cypher.append(orderByClause.joinToString(", ") { "${it.expression} ${it.direction}" })
+        }
+
+        // Build SKIP (OFFSET) clause
+        val offset = query.offset[primaryScope]
+        if (offset != null) {
+            cypher.append(" SKIP $offset")
+        }
+
+        // Build LIMIT clause
+        val limit = query.limit[primaryScope]
+        if (limit != null) {
+            cypher.append(" LIMIT $limit")
+        }
+
+        return CypherQuery(cypher.toString(), parameters.toMap())
+    }
+
+    /**
+     * Translate DELETE query from Query object to Cypher.
+     */
+    private fun translateDeleteQuery(query: Query): CypherQuery {
+        val cypher = StringBuilder()
+
+        val deleteScope = query.deleteScope ?: throw IllegalStateException("DELETE query must have deleteScope")
+        val mappedScope = mapScope(deleteScope)
+        currentScope = mappedScope
+
+        // Build MATCH clause
+        cypher.append(buildMatchClause(mappedScope))
+
+        // Build WHERE clause
+        val whereClause = buildWhereClauseFromQuery(query)
+        if (whereClause != null || logId != null) {
+            cypher.append(" WHERE ")
+            val conditions = mutableListOf<String>()
+
+            if (logId != null) {
+                conditions.add("log.logId = \$logId")
+                parameters["logId"] = logId
+            }
+
+            if (whereClause != null) {
+                conditions.add(whereClause)
+            }
+
+            cypher.append(conditions.joinToString(" AND "))
+        }
+
+        // For DELETE with LIMIT/ORDER, we need to collect IDs first
+        val orderByClause = buildOrderByClauseFromQuery(query)
+        val limit = query.limit[deleteScope]
+        val offset = query.offset[deleteScope]
+
+        if (limit != null || offset != null || orderByClause != null) {
+            val nodeLabel = scopeToNodeLabel(mappedScope)
+            cypher.append(" WITH $nodeLabel")
+
+            if (orderByClause != null && orderByClause.isNotEmpty()) {
+                cypher.append(" ORDER BY ")
+                cypher.append(orderByClause.joinToString(", ") { "${it.expression} ${it.direction}" })
+            }
+
+            if (offset != null) {
+                cypher.append(" SKIP $offset")
+            }
+
+            if (limit != null) {
+                cypher.append(" LIMIT $limit")
+            }
+        }
+
+        // DETACH DELETE to remove relationships too
+        val nodeLabel = scopeToNodeLabel(mappedScope)
+        cypher.append(" DETACH DELETE $nodeLabel")
+
+        return CypherQuery(cypher.toString(), parameters.toMap())
+    }
+
+    /**
+     * Map from model.Scope to StandardAttributeMapper.Scope
+     */
+    private fun mapScope(modelScope: com.processm.processminterpreter.pql.model.Scope): Scope {
+        return when (modelScope) {
+            com.processm.processminterpreter.pql.model.Scope.LOG -> Scope.LOG
+            com.processm.processminterpreter.pql.model.Scope.TRACE -> Scope.TRACE
+            com.processm.processminterpreter.pql.model.Scope.EVENT -> Scope.EVENT
+        }
+    }
+
+    /**
+     * Determine the primary scope from a Query object.
+     *
+     * Rules:
+     * 1. If DELETE, use deleteScope
+     * 2. If SELECT with explicit attributes/expressions, find minimum scope (LOG < TRACE < EVENT)
+     * 3. Default to EVENT
+     */
+    private fun determinePrimaryScope(query: Query): com.processm.processminterpreter.pql.model.Scope {
+        // DELETE query
+        query.deleteScope?.let { return it }
+
+        // SELECT with attributes - find minimum scope (highest in hierarchy)
+        val scopes = mutableSetOf<com.processm.processminterpreter.pql.model.Scope>()
+
+        // Add scopes from SELECT attributes
+        query.selectStandardAttributes.keys.forEach { scopes.add(it) }
+        query.selectOtherAttributes.keys.forEach { scopes.add(it) }
+        query.selectExpressions.keys.forEach { scopes.add(it) }
+
+        // Add scopes from selectAll
+        query.selectAll.forEach { (scope, isAll) ->
+            if (isAll == true) scopes.add(scope)
+        }
+
+        // Return minimum scope (LOG = 0 < TRACE = 1 < EVENT = 2)
+        return scopes.minByOrNull { it.ordinal } ?: com.processm.processminterpreter.pql.model.Scope.EVENT
+    }
+
+    /**
+     * Build WHERE clause from Query object.
+     */
+    private fun buildWhereClauseFromQuery(query: Query): String? {
+        val whereExpr = query.whereExpression ?: return null
+        return translateExpressionToCypher(whereExpr)
+    }
+
+    /**
+     * Translate an IExpression to Cypher string.
+     *
+     * This is the core expression translator that handles:
+     * - Binary operators (=, >, <, AND, OR, IN, LIKE, etc.)
+     * - Unary operators (NOT, IS NULL)
+     * - Attributes (map to Cypher fields)
+     * - Literals (strings, numbers, dates, booleans, null)
+     * - Functions (aggregations and scalar functions)
+     * - InListExpression
+     */
+    private fun translateExpressionToCypher(expr: com.processm.processminterpreter.pql.model.IExpression): String {
+        return when (expr) {
+            is BinaryOperator -> translateBinaryOperator(expr)
+            is UnaryOperator -> translateUnaryOperator(expr)
+            is InListExpression -> translateInListExpression(expr)
+            is com.processm.processminterpreter.pql.model.Attribute -> translateAttribute(expr)
+            is com.processm.processminterpreter.pql.model.Function -> translateFunction(expr)
+            is com.processm.processminterpreter.pql.model.StringLiteral -> translateStringLiteral(expr)
+            is com.processm.processminterpreter.pql.model.NumberLiteral -> translateNumberLiteral(expr)
+            is com.processm.processminterpreter.pql.model.DateTimeLiteral -> translateDateTimeLiteral(expr)
+            is com.processm.processminterpreter.pql.model.BooleanLiteral -> translateBooleanLiteral(expr)
+            is com.processm.processminterpreter.pql.model.NullLiteral -> "null"
+            else -> throw IllegalArgumentException("Unknown expression type: ${expr::class.simpleName}")
+        }
+    }
+
+    /**
+     * Translate BinaryOperator to Cypher.
+     */
+    private fun translateBinaryOperator(op: BinaryOperator): String {
+        val left = translateExpressionToCypher(op.left)
+        val right = translateExpressionToCypher(op.right)
+        val operator = op.operator.uppercase()
+
+        return when (operator) {
+            "=", "<>", "!=", ">", ">=", "<", "<=", "AND", "OR" -> "($left $operator $right)"
+            "IN" -> "$left IN $right"
+            "LIKE" -> "$left =~ $right"  // Cypher uses =~ for regex/LIKE
+            "MATCHES" -> "$left =~ $right"
+            "+" -> "($left + $right)"
+            "-" -> "($left - $right)"
+            "*" -> "($left * $right)"
+            "/" -> "($left / $right)"
+            "%" -> "($left % $right)"
+            else -> "($left $operator $right)"
+        }
+    }
+
+    /**
+     * Translate UnaryOperator to Cypher.
+     */
+    private fun translateUnaryOperator(op: UnaryOperator): String {
+        val operand = translateExpressionToCypher(op.operand)
+        val operator = op.operator.uppercase()
+
+        return when (operator) {
+            "NOT" -> "NOT ($operand)"
+            "IS NULL" -> "$operand IS NULL"
+            "IS NOT NULL" -> "$operand IS NOT NULL"
+            "-" -> "-$operand"
+            else -> "$operator $operand"
+        }
+    }
+
+    /**
+     * Translate InListExpression to Cypher array literal.
+     * For IN lists, we store the entire list as a single parameter.
+     */
+    private fun translateInListExpression(expr: InListExpression): String {
+        // Extract raw values from the list (strings, numbers, etc.)
+        val rawValues = expr.values.map { value ->
+            when (value) {
+                is com.processm.processminterpreter.pql.model.StringLiteral -> value.value
+                is com.processm.processminterpreter.pql.model.NumberLiteral -> value.value
+                is com.processm.processminterpreter.pql.model.DateTimeLiteral -> {
+                    // Convert LocalDateTime to ISO string
+                    // If time is midnight, format as date-only
+                    if (value.value.hour == 0 && value.value.minute == 0 && value.value.second == 0) {
+                        value.value.toLocalDate().toString()
+                    } else {
+                        value.value.toString()
+                    }
+                }
+                is com.processm.processminterpreter.pql.model.BooleanLiteral -> value.value
+                is com.processm.processminterpreter.pql.model.NullLiteral -> null
+                else -> throw IllegalArgumentException("Unsupported value type in IN list: ${value::class.simpleName}")
+            }
+        }
+
+        // Store the entire list as a single parameter
+        val paramName = "param${paramCounter++}"
+        parameters[paramName] = rawValues
+        return "\$$paramName"
+    }
+
+    /**
+     * Translate Attribute to Cypher field reference.
+     */
+    private fun translateAttribute(attr: com.processm.processminterpreter.pql.model.Attribute): String {
+        val scope = mapScope(attr.scope)
+        val nodeLabel = scopeToNodeLabel(scope)
+        return attributeToCypherField(attr, nodeLabel)
+    }
+
+    /**
+     * Translate Function to Cypher function call.
+     */
+    private fun translateFunction(func: com.processm.processminterpreter.pql.model.Function): String {
+        val funcName = func.name.lowercase()
+        val args = func.children.map { translateExpressionToCypher(it) }
+
+        // Map PQL function names to Cypher/Neo4j function names
+        val cypherFuncName = when (funcName) {
+            // Aggregation functions (mostly same)
+            "count", "sum", "avg", "min", "max" -> funcName
+
+            // Scalar functions - date/time
+            "year" -> "date.year"
+            "month" -> "date.month"
+            "day" -> "date.day"
+            "hour" -> "time.hour"
+            "minute" -> "time.minute"
+            "second" -> "time.second"
+            "now" -> "datetime()"
+
+            // String functions
+            "lower", "upper", "trim" -> funcName
+            "substring" -> "substring"
+            "length" -> "size"
+
+            // Math functions
+            "abs", "ceil", "floor", "round", "sqrt" -> funcName
+
+            // Default: use as-is
+            else -> funcName
+        }
+
+        return if (args.isEmpty()) {
+            "$cypherFuncName()"
+        } else {
+            "$cypherFuncName(${args.joinToString(", ")})"
+        }
+    }
+
+    /**
+     * Translate StringLiteral to Cypher string.
+     */
+    private fun translateStringLiteral(lit: com.processm.processminterpreter.pql.model.StringLiteral): String {
+        // Use parameterized queries to avoid SQL injection
+        val paramName = "param${paramCounter++}"
+        // Handle dates in string format: 'D2005-01-01' -> '2005-01-01'
+        val value = if (lit.value.startsWith("D") && lit.value.length >= 10 &&
+            lit.value[1].isDigit() && lit.value[5] == '-' && lit.value[8] == '-'
+        ) {
+            lit.value.substring(1) // Remove 'D' prefix from date strings
+        } else {
+            lit.value
+        }
+        parameters[paramName] = value
+        return "\$$paramName"
+    }
+
+    /**
+     * Translate NumberLiteral to Cypher number.
+     */
+    private fun translateNumberLiteral(lit: com.processm.processminterpreter.pql.model.NumberLiteral): String {
+        return lit.value.toString()
+    }
+
+    /**
+     * Translate DateTimeLiteral to Cypher datetime.
+     */
+    private fun translateDateTimeLiteral(lit: com.processm.processminterpreter.pql.model.DateTimeLiteral): String {
+        // Use parameterized query
+        val paramName = "param${paramCounter++}"
+        // Convert LocalDateTime to ISO string
+        // If time is midnight (00:00:00), format as date-only, otherwise include time
+        val dateValue = if (lit.value.hour == 0 && lit.value.minute == 0 && lit.value.second == 0) {
+            lit.value.toLocalDate().toString()  // Date-only format: 2005-01-01
+        } else {
+            lit.value.toString()  // Full datetime format: 2005-01-01T12:30:00
+        }
+        parameters[paramName] = dateValue
+        return "\$$paramName"
+    }
+
+    /**
+     * Translate BooleanLiteral to Cypher boolean.
+     */
+    private fun translateBooleanLiteral(lit: com.processm.processminterpreter.pql.model.BooleanLiteral): String {
+        return lit.value.toString()
+    }
+
+    /**
+     * Build RETURN clause from Query object.
+     * Iterates through all scopes that have SELECT attributes and includes them in the RETURN.
+     */
+    private fun buildReturnClauseFromQuery(query: Query): String {
+        val allParts = mutableListOf<String>()
+
+        // Collect all scopes that have SELECT attributes
+        val scopesWithSelects = mutableSetOf<com.processm.processminterpreter.pql.model.Scope>()
+        query.selectStandardAttributes.keys.forEach { scopesWithSelects.add(it) }
+        query.selectOtherAttributes.keys.forEach { scopesWithSelects.add(it) }
+        query.selectExpressions.keys.forEach { scopesWithSelects.add(it) }
+        query.selectAll.forEach { (scope, isAll) ->
+            if (isAll == true) scopesWithSelects.add(scope)
+        }
+        query.isImplicitSelectAll.forEach { (scope, isImplicit) ->
+            if (isImplicit == true) scopesWithSelects.add(scope)
+        }
+
+        // If no explicit scopes, use primary scope
+        if (scopesWithSelects.isEmpty()) {
+            val primaryScope = determinePrimaryScope(query)
+            scopesWithSelects.add(primaryScope)
+        }
+
+        // Process each scope in order (LOG -> TRACE -> EVENT)
+        val orderedScopes = scopesWithSelects.sortedBy { it.ordinal }
+
+        for (modelScope in orderedScopes) {
+            val scope = mapScope(modelScope)
+            val nodeLabel = scopeToNodeLabel(scope)
+
+            logger.debug("Building RETURN for scope=$scope, modelScope=$modelScope")
+            logger.debug("selectAll=${query.selectAll[modelScope]}, isImplicitSelectAll=${query.isImplicitSelectAll[modelScope]}")
+            logger.debug("selectStandardAttributes=${query.selectStandardAttributes[modelScope]?.map { it.name }}")
+            logger.debug("selectOtherAttributes=${query.selectOtherAttributes[modelScope]?.map { it.name }}")
+
+            // SELECT * or implicit SELECT * for this scope
+            if (query.selectAll[modelScope] == true || query.isImplicitSelectAll[modelScope] == true) {
+                allParts.add("properties($nodeLabel) as $nodeLabel")
+                continue
+            }
+
+            // SELECT specific attributes for this scope
+            // Standard attributes
+            query.selectStandardAttributes[modelScope]?.forEach { attr ->
+                val cypherField = attributeToCypherField(attr, nodeLabel)
+                logger.debug("Standard attr: ${attr.name} -> $cypherField")
+                allParts.add(cypherField)
+            }
+
+            // Other attributes
+            query.selectOtherAttributes[modelScope]?.forEach { attr ->
+                val cypherField = attributeToCypherField(attr, nodeLabel)
+                logger.debug("Other attr: ${attr.name} -> $cypherField")
+                allParts.add(cypherField)
+            }
+
+            // Expressions (functions, etc.)
+            query.selectExpressions[modelScope]?.forEach { expr ->
+                val cypherExpr = translateExpressionToCypher(expr)
+                allParts.add(cypherExpr)
+            }
+        }
+
+        logger.debug("Final RETURN parts: $allParts")
+
+        return if (allParts.isEmpty()) {
+            // Default: return all properties of primary scope
+            val primaryScope = determinePrimaryScope(query)
+            val scope = mapScope(primaryScope)
+            val nodeLabel = scopeToNodeLabel(scope)
+            "properties($nodeLabel) as $nodeLabel"
+        } else {
+            allParts.joinToString(", ")
+        }
+    }
+
+    /**
+     * Convert an Attribute to Cypher field reference.
+     */
+    private fun attributeToCypherField(attr: com.processm.processminterpreter.pql.model.Attribute, nodeLabel: String): String {
+        // Map attribute name to Neo4j property name
+        val modelScope = when (attr.scope) {
+            com.processm.processminterpreter.pql.model.Scope.LOG -> Scope.LOG
+            com.processm.processminterpreter.pql.model.Scope.TRACE -> Scope.TRACE
+            com.processm.processminterpreter.pql.model.Scope.EVENT -> Scope.EVENT
+        }
+
+        // Use the original attribute name as-is for translation
+        // StandardAttributeMapper will handle mapping to Neo4j property names
+        val propertyName = StandardAttributeMapper.translateToNeo4jProperty(attr.name, modelScope)
+
+        return "$nodeLabel.$propertyName"
+    }
+
+    /**
+     * Build ORDER BY clause from Query object.
+     */
+    private fun buildOrderByClauseFromQuery(query: Query): List<OrderByItem>? {
+        val primaryScope = determinePrimaryScope(query)
+        val expressions = query.orderByExpressions[primaryScope] ?: return null
+
+        if (expressions.isEmpty()) return null
+
+        return expressions.map { orderedExpr ->
+            val cypherExpr = translateExpressionToCypher(orderedExpr.expression)
+            val direction = when (orderedExpr.direction) {
+                com.processm.processminterpreter.pql.model.OrderDirection.ASCENDING -> "ASC"
+                com.processm.processminterpreter.pql.model.OrderDirection.DESCENDING -> "DESC"
+            }
+            OrderByItem(cypherExpr, direction)
+        }
+    }
+
     /**
      * offset: OFFSET offset_number (',' offset_number)*
      */
@@ -664,6 +1237,7 @@ class QLToCypherVisitor(
 
     data class OrderByItem(val expression: String, val direction: String)
 
+    @Deprecated("Not used - replaced by translateSelectQuery")
     private fun buildReadQuery(
         scope: Scope,
         selectClause: String,
@@ -723,6 +1297,7 @@ class QLToCypherVisitor(
         return CypherQuery(cypher.toString(), parameters.toMap())
     }
 
+    @Deprecated("Not used - replaced by translateDeleteQuery")
     private fun buildDeleteQuery(
         scope: Scope,
         whereClause: String?,
@@ -779,18 +1354,74 @@ class QLToCypherVisitor(
     }
 
     private fun buildMatchClause(scope: Scope): String {
-        return when (scope) {
-            Scope.LOG -> "MATCH (log:Log)"
-            Scope.TRACE -> if (logId != null) {
-                "MATCH (log:Log {logId: \$logId})-[:CONTAINS]->(trace:Trace)"
-            } else {
-                "MATCH (trace:Trace)"
+        // If no scopes were tracked yet, fall back to currentScope
+        val scopesToInclude = if (usedScopes.isEmpty()) setOf(scope) else usedScopes
+
+        // Determine which scopes to include in MATCH clause
+        val needsLog = scopesToInclude.contains(Scope.LOG) || logId != null
+        val needsTrace = scopesToInclude.contains(Scope.TRACE)
+        val needsEvent = scopesToInclude.contains(Scope.EVENT)
+
+        // Build MATCH clause from highest to lowest scope
+        return when {
+            // All three scopes needed
+            needsLog && needsTrace && needsEvent -> {
+                if (logId != null) {
+                    "MATCH (log:Log {logId: \$logId})-[:CONTAINS]->(trace:Trace)-[:HAS_EVENT]->(event:Event)"
+                } else {
+                    "MATCH (log:Log)-[:CONTAINS]->(trace:Trace)-[:HAS_EVENT]->(event:Event)"
+                }
             }
-            Scope.EVENT -> if (logId != null) {
-                "MATCH (log:Log {logId: \$logId})-[:CONTAINS]->(trace:Trace)-[:HAS_EVENT]->(event:Event)"
-            } else {
-                "MATCH (event:Event)"
+            // LOG and TRACE
+            needsLog && needsTrace -> {
+                if (logId != null) {
+                    "MATCH (log:Log {logId: \$logId})-[:CONTAINS]->(trace:Trace)"
+                } else {
+                    "MATCH (log:Log)-[:CONTAINS]->(trace:Trace)"
+                }
             }
+            // LOG and EVENT (unusual, but traverse through trace)
+            needsLog && needsEvent -> {
+                if (logId != null) {
+                    "MATCH (log:Log {logId: \$logId})-[:CONTAINS]->(trace:Trace)-[:HAS_EVENT]->(event:Event)"
+                } else {
+                    "MATCH (log:Log)-[:CONTAINS]->(trace:Trace)-[:HAS_EVENT]->(event:Event)"
+                }
+            }
+            // TRACE and EVENT
+            needsTrace && needsEvent -> {
+                if (logId != null) {
+                    "MATCH (log:Log {logId: \$logId})-[:CONTAINS]->(trace:Trace)-[:HAS_EVENT]->(event:Event)"
+                } else {
+                    "MATCH (trace:Trace)-[:HAS_EVENT]->(event:Event)"
+                }
+            }
+            // Only LOG
+            needsLog -> {
+                if (logId != null) {
+                    "MATCH (log:Log {logId: \$logId})"
+                } else {
+                    "MATCH (log:Log)"
+                }
+            }
+            // Only TRACE
+            needsTrace -> {
+                if (logId != null) {
+                    "MATCH (log:Log {logId: \$logId})-[:CONTAINS]->(trace:Trace)"
+                } else {
+                    "MATCH (trace:Trace)"
+                }
+            }
+            // Only EVENT (most common case)
+            needsEvent -> {
+                if (logId != null) {
+                    "MATCH (log:Log {logId: \$logId})-[:CONTAINS]->(trace:Trace)-[:HAS_EVENT]->(event:Event)"
+                } else {
+                    "MATCH (event:Event)"
+                }
+            }
+            // Fallback
+            else -> "MATCH (event:Event)"
         }
     }
 

@@ -221,7 +221,8 @@ class QLToCypherVisitorTest {
         println("Cypher: ${result.query}")
 
         assertTrue(result.query.contains("count"))
-        assertTrue(result.query.contains("event.id"))
+        // "id" is a standard attribute that maps to "eventId" in EVENT scope
+        assertTrue(result.query.contains("event.eventId"))
     }
 
     @Test
@@ -399,9 +400,231 @@ class QLToCypherVisitorTest {
         assertTrue(result.query.contains("WHERE"))
         assertTrue(result.query.contains("IN"))
         // Neo4j Cypher doesn't have explicit GROUP BY - it groups implicitly by non-aggregated fields in RETURN
-        assertTrue(result.query.contains("count(event.id)"))
+        // "id" is a standard attribute that maps to "eventId" in EVENT scope
+        assertTrue(result.query.contains("count(event.eventId)"))
         assertTrue(result.query.contains("ORDER BY"))
         // Date should not have 'D' prefix
         assertEquals("2005-01-01", result.parameters["param0"])
+    }
+
+    // ========================================
+    // PROCESSM TESTS - ADAPTED FROM OFFICIAL REPO
+    // https://github.com/ProcessMPUT/processm/tree/master/processm.core/src/test/kotlin/processm/core/querylanguage
+    // ========================================
+
+    /**
+     * Adapted from QueryTests.kt - basicSelectTest
+     * Tests: SELECT with different scopes (log, trace, event)
+     * ProcessM: Tests that query.selectStandardAttributes[Scope.Log/Trace/Event] contains concept:name
+     * Our adaptation: Tests that generated Cypher contains correct Neo4j property mappings
+     */
+    @Test
+    fun `ProcessM basicSelectTest - multi-scope select with standard attributes`() {
+        val pql = "select l:name, t:name, e:name"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        // l:name → log.name (concept:name in XES)
+        assertTrue(result.query.contains("log.name"), "Should contain log.name")
+
+        // t:name → trace.caseId (concept:name in XES, maps to caseId for traces)
+        assertTrue(result.query.contains("trace.caseId"), "Should contain trace.caseId")
+
+        // e:name → event.activity (concept:name in XES, maps to activity for events)
+        assertTrue(result.query.contains("event.activity"), "Should contain event.activity")
+
+        // Should have all three scopes in MATCH
+        assertTrue(result.query.contains("MATCH"), "Should have MATCH clause")
+    }
+
+    /**
+     * Adapted from QueryTests.kt - basicSelectTest
+     * Tests: Standard shorthand attribute mappings
+     */
+    @Test
+    fun `ProcessM standardAttributes - event scope shorthands`() {
+        val pql = "select e:name, e:timestamp, e:resource, e:group, e:total, e:currency"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        // Standard attribute mappings for EVENT scope
+        assertTrue(result.query.contains("event.activity"), "e:name → event.activity")
+        assertTrue(result.query.contains("event.timestamp"), "e:timestamp → event.timestamp")
+        assertTrue(result.query.contains("event.resource"), "e:resource → event.resource")
+        assertTrue(result.query.contains("event.org_group"), "e:group → event.org_group")
+        assertTrue(result.query.contains("event.cost_total"), "e:total → event.cost_total")
+        assertTrue(result.query.contains("event.cost_currency"), "e:currency → event.cost_currency")
+    }
+
+    /**
+     * Adapted from QueryTests.kt - basicSelectTest
+     * Tests: Standard shorthand attribute mappings for TRACE scope
+     */
+    @Test
+    fun `ProcessM standardAttributes - trace scope shorthands`() {
+        val pql = "select t:name, t:id, t:total, t:currency"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        // Standard attribute mappings for TRACE scope
+        assertTrue(result.query.contains("trace.caseId"), "t:name → trace.caseId")
+        assertTrue(result.query.contains("trace.traceId"), "t:id → trace.traceId")
+        assertTrue(result.query.contains("trace.cost_total"), "t:total → trace.cost_total")
+        assertTrue(result.query.contains("trace.cost_currency"), "t:currency → trace.cost_currency")
+    }
+
+    /**
+     * Adapted from QueryTests.kt - whereSimpleWithHoistingTest
+     * Tests: Scope hoisting with ^ operator
+     * ProcessM: ^e:name raises scope from EVENT to TRACE
+     */
+    @Test
+    fun `ProcessM hoisting - single caret raises scope by one level`() {
+        val pql = "select ^e:name"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        // ^e:name → trace.concept_name (EVENT raised to TRACE)
+        // In our schema, trace concept:name maps to caseId
+        assertTrue(
+            result.query.contains("trace.caseId") || result.query.contains("trace.concept_name"),
+            "^e:name should raise EVENT to TRACE scope, mapping name to caseId or concept_name",
+        )
+
+        // Should NOT contain event scope for this field
+        assertFalse(result.query.contains("event.caseId"), "Should not use event scope after hoisting")
+    }
+
+    /**
+     * Adapted from QueryTests.kt - whereSimpleWithHoistingTest
+     * Tests: Double hoisting with ^^ operator
+     * ProcessM: ^^e:name raises scope from EVENT to LOG
+     */
+    @Test
+    fun `ProcessM hoisting - double caret raises scope by two levels`() {
+        val pql = "select ^^e:name"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        // ^^e:name → log.name (EVENT raised to LOG)
+        assertTrue(
+            result.query.contains("log.name") || result.query.contains("log.concept_name"),
+            "^^e:name should raise EVENT to LOG scope",
+        )
+
+        // Should NOT contain event or trace scope for this field
+        assertFalse(result.query.contains("event.name"), "Should not use event scope after double hoisting")
+        assertFalse(result.query.contains("trace.name"), "Should not use trace scope after double hoisting")
+    }
+
+    /**
+     * Adapted from QueryTests.kt - whereSimpleWithHoistingTest
+     * Tests: Hoisting in WHERE clause
+     */
+    @Test
+    fun `ProcessM hoisting - in WHERE clause`() {
+        val pql = "where ^e:name = 'test-case'"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        assertTrue(result.query.contains("WHERE"), "Should have WHERE clause")
+        // ^e:name in WHERE should raise to trace scope
+        assertTrue(
+            result.query.contains("trace.caseId") || result.query.contains("trace.concept_name"),
+            "^e:name in WHERE should use trace scope",
+        )
+    }
+
+    /**
+     * Adapted from QueryTests.kt - groupByWithHoistingTest
+     * Tests: Cross-scope aggregation with hoisting
+     */
+    @Test
+    fun `ProcessM hoisting - cross-scope aggregation`() {
+        val pql = "select ^e:name, count(e:id) group by ^e:name"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        // ^e:name → trace scope (caseId)
+        assertTrue(
+            result.query.contains("trace.caseId") || result.query.contains("trace.concept_name"),
+            "^e:name should use trace scope",
+        )
+
+        // e:id → event.eventId
+        assertTrue(result.query.contains("event.eventId"), "e:id should map to event.eventId")
+
+        // Should have count aggregation
+        assertTrue(result.query.contains("count"), "Should have count aggregation")
+    }
+
+    /**
+     * Tests: Standard attribute with explicit XES name (not shorthand)
+     * Example: event:org:group instead of event:group
+     */
+    @Test
+    fun `ProcessM standardAttributes - full XES attribute names`() {
+        val pql = "select e:org:group, e:cost:total"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        // Full XES names should be sanitized (: → _)
+        assertTrue(
+            result.query.contains("event.org_group"),
+            "e:org:group should be sanitized to event.org_group",
+        )
+        assertTrue(
+            result.query.contains("event.cost_total"),
+            "e:cost:total should be sanitized to event.cost_total",
+        )
+    }
+
+    /**
+     * Adapted from QueryTests.kt - orderBySimpleTest
+     * Tests: ORDER BY with standard attributes
+     */
+    @Test
+    fun `ProcessM orderBy - with standard attributes`() {
+        val pql = "select e:name, e:timestamp order by e:timestamp asc"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        assertTrue(result.query.contains("ORDER BY"), "Should have ORDER BY clause")
+        assertTrue(result.query.contains("event.timestamp"), "Should order by event.timestamp")
+        assertTrue(result.query.contains("ASC"), "Should have ASC direction")
+    }
+
+    /**
+     * Adapted from QueryTests.kt - limitAllTest
+     * Tests: LIMIT clause
+     */
+    @Test
+    fun `ProcessM limit - basic limit clause`() {
+        val pql = "select e:name limit 10"
+        val result = translateQuery(pql)
+
+        println("PQL: $pql")
+        println("Cypher: ${result.query}")
+
+        assertTrue(result.query.contains("LIMIT 10"), "Should have LIMIT 10")
+        assertTrue(result.query.contains("event.activity"), "e:name should map to event.activity")
     }
 }

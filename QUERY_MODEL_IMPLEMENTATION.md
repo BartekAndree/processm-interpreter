@@ -10,10 +10,23 @@ Implementacja pełnego modelu obiektowego Query dla ProcessM Query Language (PQL
 ## Źródła i Referencje
 
 ### Główne Źródło: ProcessM Official Repository
+- **ProcessM Website:** https://processm.cs.put.poznan.pl
 - **Repository:** https://github.com/ProcessMPUT/processm
-- **Grammar:** `processm/src/main/antlr/QL.g4`
-- **Query Model:** `processm/src/main/kotlin/put/processm/ql/model/`
-- **Tests:** `processm/src/test/kotlin/put/processm/ql/model/`
+- **PQL Specification:** https://github.com/ProcessMPUT/processm/blob/master/docs/pql.md
+- **Grammar (ANTLR4):** https://github.com/ProcessMPUT/processm/tree/master/processm.core/src/main/antlr4/processm/core/querylanguage
+- **Query Model:** https://github.com/ProcessMPUT/processm/blob/master/processm.core/src/main/kotlin/processm/core/querylanguage/Query.kt
+- **Original Interpreter:** https://github.com/ProcessMPUT/processm/blob/master/processm.core/src/main/kotlin/processm/core/log/hierarchical/TranslatedQuery.kt
+
+### ProcessM Tests (Required for Validation)
+- **Parser Tests:** https://github.com/ProcessMPUT/processm/tree/master/processm.core/src/test/kotlin/processm/core/querylanguage
+  - AttributeTests, FunctionTests, LiteralTests, OrderDirectionTests, **QueryTests** (71 tests), ScopeTests
+- **Interpreter Tests:** https://github.com/ProcessMPUT/processm/tree/master/processm.core/src/test/kotlin/processm/core/log/hierarchical
+  - DBHierarchicalXESInputStreamTests, WithQueryTests, WithSelectQueryTests, WithWhereQueryTests
+
+### Data & Standards
+- **Example XES Logs:** https://github.com/ProcessMPUT/processm/tree/master/xes-logs (100+ benchmark files)
+- **XES Standard (IEEE 1849-2016):** http://www.xes-standard.org/
+- **OpenXES Library:** http://www.openxes.org/
 
 ### Wykorzystane Komponenty z ProcessM:
 1. **ANTLR Grammar** - Oficjalna gramatyka PQL (`QL.g4`)

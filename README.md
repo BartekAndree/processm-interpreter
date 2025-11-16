@@ -1,6 +1,53 @@
-# ProcessM Interpreter - Neo4j PoC
+# ProcessM Interpreter - Neo4j Implementation
 
-Proof of Concept interpretera języka PQL (Process Query Language) dla systemu ProcessM, wykorzystującego bazę danych Neo4j do przechowywania i przetwarzania logów procesów w formacie XES.
+**Alternatywny interpreter języka PQL** (Process Query Language) dla systemu [ProcessM](https://processm.cs.put.poznan.pl), wykorzystujący **Neo4j graph database** zamiast PostgreSQL do wydajniejszego przechowywania i przetwarzania hierarchicznych logów procesów w formacie XES.
+
+## 🎯 Cel Projektu
+
+Stworzenie **standalone REST component** dla ProcessM, który:
+- Zastępuje nieefektywny PostgreSQL-based interpreter
+- Wykorzystuje graph database (Neo4j) lepiej dopasowaną do hierarchical event data
+- Udostępnia operacje CRUD na logach XES
+- Interpretuje i wykonuje zapytania PQL
+- **Zwraca wyniki w formacie XES** (zgodnie z IEEE 1849-2016)
+
+**Original ProcessM Interpreter (PostgreSQL):**
+- Repository: [TranslatedQuery.kt](https://github.com/ProcessMPUT/processm/blob/master/processm.core/src/main/kotlin/processm/core/log/hierarchical/TranslatedQuery.kt)
+- Problem: tłumaczy PQL na serię zapytań SQL → nieefektywne dla hierarchical data
+
+**Ten projekt:** Wykorzystuje Neo4j Cypher dla native graph operations
+
+## 🔗 ProcessM References
+
+### ProcessM System
+- **Official Website:** https://processm.cs.put.poznan.pl
+- **Main Repository:** https://github.com/ProcessMPUT/processm
+- **PQL Specification:** [docs/pql.md](https://github.com/ProcessMPUT/processm/blob/master/docs/pql.md)
+
+### ProcessM Implementation (Reference)
+- **Parser Grammar (ANTLR4):** [processm.core/...​/querylanguage](https://github.com/ProcessMPUT/processm/tree/master/processm.core/src/main/antlr4/processm/core/querylanguage)
+- **Query Model (Kotlin):** [Query.kt](https://github.com/ProcessMPUT/processm/blob/master/processm.core/src/main/kotlin/processm/core/querylanguage/Query.kt)
+- **Original Interpreter (PostgreSQL):** [TranslatedQuery.kt](https://github.com/ProcessMPUT/processm/blob/master/processm.core/src/main/kotlin/processm/core/log/hierarchical/TranslatedQuery.kt)
+
+### ProcessM Tests (Required for Compatibility)
+- **Parser Tests:** [processm.core/.../querylanguage](https://github.com/ProcessMPUT/processm/tree/master/processm.core/src/test/kotlin/processm/core/querylanguage)
+  - AttributeTests, FunctionTests, LiteralTests, OrderDirectionTests, **QueryTests** (71 tests), ScopeTests
+- **Interpreter Tests:** [processm.core/.../hierarchical](https://github.com/ProcessMPUT/processm/tree/master/processm.core/src/test/kotlin/processm/core/log/hierarchical)
+  - DBHierarchicalXESInputStreamTests, WithQueryTests, WithSelectQueryTests, WithWhereQueryTests
+
+### Data & Standards
+- **Example XES Logs:** [processm/xes-logs](https://github.com/ProcessMPUT/processm/tree/master/xes-logs)
+  - BPIC series, Hospital, Road Traffic Fine, Sepsis Cases, CoSeLoG WABO (100+ files)
+- **XES Standard (IEEE 1849-2016):** http://www.xes-standard.org/
+- **OpenXES Library:** http://www.openxes.org/
+
+## 📋 Project Documentation
+
+- **[PROJECT_REQUIREMENTS.md](PROJECT_REQUIREMENTS.md)** - Oryginalna specyfikacja zadania i wymagania
+- **[GAP_ANALYSIS.md](GAP_ANALYSIS.md)** - Analiza luk względem wymagań (🔴 KRYTYCZNE: XES output, ProcessM tests)
+- **[QUERY_MODEL_IMPLEMENTATION.md](QUERY_MODEL_IMPLEMENTATION.md)** - Szczegółowa dokumentacja Query Model
+- **[ROADMAP.md](ROADMAP.md)** - Plan rozwoju (Fazy 4-7)
+- **[NEXT_STEPS.md](NEXT_STEPS.md)** - Kolejne kroki i priorytety
 
 ## Architektura
 
@@ -182,17 +229,56 @@ MATCH (n) RETURN count(n);  # Liczba wszystkich węzłów
 MATCH (n) DETACH DELETE n;  # Usunięcie wszystkich danych (UWAGA!)
 ```
 
+## 📊 Current Status
+
+### ✅ Implemented (70%)
+- [x] **XES Input** - XESParser, XESLoader (batch processing, index creation)
+- [x] **PQL Parser** - ANTLR4 with official ProcessM grammar
+- [x] **Query Model** - Full Expression hierarchy (IExpression → concrete types)
+- [x] **PQL → Cypher Translation** - QLToCypherVisitor with parameterized queries
+- [x] **SELECT Queries** - Multi-scope, expressions, `*`, standard attributes
+- [x] **WHERE Queries** - Complex logic, all operators (=, !=, <, >, <=, >=, LIKE, IN, IS NULL, AND, OR, NOT)
+- [x] **ORDER BY** - ASC/DESC, multi-scope
+- [x] **LIMIT/OFFSET** - Per-scope pagination
+- [x] **DELETE Queries** - With WHERE, ORDER BY, LIMIT
+- [x] **Scalar Functions** - 15 functions (date/time, string, math)
+- [x] **Aggregation Functions** - 5 functions (count, sum, avg, min, max) - basic support
+- [x] **GROUP BY** - Basic cases working (requires completion for multi-scope, hoisting)
+- [x] **Scope System** - LOG/TRACE/EVENT + hoisting (`^`, `^^`)
+- [x] **Standard Attributes** - XES IEEE 1849-2016 mapping
+- [x] **REST API** - CRUD operations (upload, get, list, delete logs)
+- [x] **Query Execution API** - Execute, validate (JSON output)
+- [x] **Own Tests** - 182/182 passing ✅
+
+### ❌ Critical Gaps (30%) - See [GAP_ANALYSIS.md](GAP_ANALYSIS.md)
+- [ ] 🔴 **XES Output** - No XESWriter/serializer (results returned as JSON, not XES XML)
+- [ ] 🔴 **XES Output Endpoint** - `/api/query/execute-xes` not implemented
+- [ ] 🔴 **ProcessM Parser Tests** - Not ported (AttributeTests, FunctionTests, LiteralTests, OrderDirectionTests, QueryTests [71], ScopeTests)
+- [ ] 🔴 **ProcessM Interpreter Tests** - Not ported (DBHierarchicalXESInputStreamTests, WithQuery/Select/WhereTests)
+- [ ] 🟡 **Benchmark XES Logs** - Only 2 logs in project (Hospital, sample_process), missing BPIC series and others
+- [ ] 🟢 **GROUP BY Completion** - Multi-scope, hoisting, full validation
+- [ ] 🟢 **Query Statistics** - Timing, success/fail tracking (3 TODO comments in code)
+- [ ] 🟢 **Deprecated Code Cleanup** - ~750 lines marked @Deprecated in QLToCypherVisitor.kt
+
+**⚠️ Most Critical:**
+1. **XES Output** - Main requirement from task specification not fulfilled
+2. **ProcessM Test Compatibility** - Required validation not performed
+
+**See full analysis:** [GAP_ANALYSIS.md](GAP_ANALYSIS.md)
+
 ## Roadmap
 
 ### Faza 1 - Podstawowa funkcjonalność ✅
 - [x] Konfiguracja Neo4j
 - [x] Podstawowe modele danych
-- [ ] Ładowanie plików XES
-- [ ] Podstawowe zapytania SELECT/WHERE
+- [x] Ładowanie plików XES (XESParser, XESLoader)
+- [x] Podstawowe zapytania SELECT/WHERE
+- [x] REST API (upload, query, validate)
 
-### Faza 2 - Rozszerzenia
-- [ ] Implementacja GROUP BY
-- [ ] Funkcje agregujące
+### Faza 2 - Rozszerzenia 🔶
+- [x] Podstawowa implementacja GROUP BY
+- [x] Funkcje agregujące (podstawowe wsparcie)
+- [ ] Pełna implementacja GROUP BY (multi-scope, hoisting, walidacja)
 - [ ] Optymalizacja wydajności
 - [ ] Testy wydajnościowe
 
@@ -203,6 +289,13 @@ MATCH (n) DETACH DELETE n;  # Usunięcie wszystkich danych (UWAGA!)
 - [x] Cypher translation pipeline (Query → Cypher)
 - [x] Dokumentacja implementacji ([QUERY_MODEL_IMPLEMENTATION.md](QUERY_MODEL_IMPLEMENTATION.md))
 - [x] Wszystkie testy przechodzą (182/182) ✅
+
+### Dalszy Rozwój
+Szczegółowy plan kolejnych faz rozwoju (Fazy 4-7) dostępny w: **[ROADMAP.md](ROADMAP.md)**
+- Faza 4: Kompletna implementacja GROUP BY i agregacji
+- Faza 5: Optymalizacja wydajności
+- Faza 6: Production readiness (monitoring, cleanup, deployment)
+- Faza 7: Advanced features (opcjonalne rozszerzenia)
 
 ## Troubleshooting
 

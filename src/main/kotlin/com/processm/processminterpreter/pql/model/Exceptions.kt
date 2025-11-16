@@ -7,7 +7,7 @@ package com.processm.processminterpreter.pql.model
  */
 sealed class PQLException(
     message: String,
-    cause: Throwable? = null
+    cause: Throwable? = null,
 ) : RuntimeException(message, cause)
 
 /**
@@ -24,10 +24,10 @@ class PQLSyntaxException(
     val line: Int,
     val charPositionInLine: Int,
     message: String,
-    cause: Throwable? = null
+    cause: Throwable? = null,
 ) : PQLException(
     "Syntax error at $line:$charPositionInLine - $message",
-    cause
+    cause,
 )
 
 /**
@@ -43,7 +43,7 @@ class PQLSyntaxException(
  */
 open class PQLSemanticException(
     message: String,
-    cause: Throwable? = null
+    cause: Throwable? = null,
 ) : PQLException(message, cause)
 
 /**
@@ -54,7 +54,7 @@ open class PQLSemanticException(
  * - ^l:name (LOG has no parent scope)
  */
 class InvalidScopeHoistingException(
-    message: String
+    message: String,
 ) : PQLSemanticException(message)
 
 /**
@@ -68,7 +68,7 @@ class InvalidScopeHoistingException(
  * - select l:c:activity (classifiers not allowed at LOG scope)
  */
 class InvalidClassifierUsageException(
-    message: String
+    message: String,
 ) : PQLSemanticException(message)
 
 /**
@@ -79,7 +79,7 @@ class InvalidClassifierUsageException(
  * - GROUP BY on non-selected field
  */
 class InvalidGroupByException(
-    message: String
+    message: String,
 ) : PQLSemanticException(message)
 
 /**
@@ -91,7 +91,7 @@ class InvalidGroupByException(
  * - SELECT with DELETE
  */
 class InvalidDeleteException(
-    message: String
+    message: String,
 ) : PQLSemanticException(message)
 
 /**
@@ -103,5 +103,5 @@ class InvalidDeleteException(
  * - Scalar function with scope greater than argument scope
  */
 class InvalidFunctionException(
-    message: String
+    message: String,
 ) : PQLSemanticException(message)

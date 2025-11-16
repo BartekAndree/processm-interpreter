@@ -52,7 +52,7 @@ object StandardAttributes {
         "state" to LIFECYCLE_STATE,
         "total" to COST_TOTAL,
         "currency" to COST_CURRENCY,
-        "id" to CONCEPT_INSTANCE  // Special: e:id maps to concept:instance
+        "id" to CONCEPT_INSTANCE, // Special: e:id maps to concept:instance
     )
 
     /**
@@ -62,7 +62,7 @@ object StandardAttributes {
         "name" to CONCEPT_NAME,
         "id" to CONCEPT_INSTANCE,
         "total" to COST_TOTAL,
-        "currency" to COST_CURRENCY
+        "currency" to COST_CURRENCY,
     )
 
     /**
@@ -72,7 +72,7 @@ object StandardAttributes {
         "name" to CONCEPT_NAME,
         "id" to CONCEPT_INSTANCE,
         "version" to "log:version",
-        "features" to "log:features"
+        "features" to "log:features",
     )
 
     // ========================================
@@ -85,36 +85,36 @@ object StandardAttributes {
      * EVENT scope: XES standard name → Neo4j property name
      */
     val EVENT_NEO4J_MAPPINGS = mapOf(
-        CONCEPT_NAME to "activity",           // concept:name → activity
-        CONCEPT_INSTANCE to "eventId",        // concept:instance → eventId
-        TIME_TIMESTAMP to "timestamp",        // time:timestamp → timestamp
-        ORG_RESOURCE to "resource",           // org:resource → resource
-        ORG_GROUP to "org_group",             // org:group → org_group
-        ORG_ROLE to "org_role",               // org:role → org_role
+        CONCEPT_NAME to "activity", // concept:name → activity
+        CONCEPT_INSTANCE to "eventId", // concept:instance → eventId
+        TIME_TIMESTAMP to "timestamp", // time:timestamp → timestamp
+        ORG_RESOURCE to "resource", // org:resource → resource
+        ORG_GROUP to "org_group", // org:group → org_group
+        ORG_ROLE to "org_role", // org:role → org_role
         LIFECYCLE_TRANSITION to "lifecycle_transition",
         LIFECYCLE_STATE to "lifecycle_state",
-        COST_TOTAL to "cost_total",           // cost:total → cost_total
-        COST_CURRENCY to "cost_currency"      // cost:currency → cost_currency
+        COST_TOTAL to "cost_total", // cost:total → cost_total
+        COST_CURRENCY to "cost_currency", // cost:currency → cost_currency
     )
 
     /**
      * TRACE scope: XES standard name → Neo4j property name
      */
     val TRACE_NEO4J_MAPPINGS = mapOf(
-        CONCEPT_NAME to "caseId",             // concept:name → caseId (trace name is case ID)
-        CONCEPT_INSTANCE to "traceId",        // concept:instance → traceId
+        CONCEPT_NAME to "caseId", // concept:name → caseId (trace name is case ID)
+        CONCEPT_INSTANCE to "traceId", // concept:instance → traceId
         COST_TOTAL to "cost_total",
-        COST_CURRENCY to "cost_currency"
+        COST_CURRENCY to "cost_currency",
     )
 
     /**
      * LOG scope: XES standard name → Neo4j property name
      */
     val LOG_NEO4J_MAPPINGS = mapOf(
-        CONCEPT_NAME to "name",               // concept:name → name
-        CONCEPT_INSTANCE to "logId",          // concept:instance → logId
+        CONCEPT_NAME to "name", // concept:name → name
+        CONCEPT_INSTANCE to "logId", // concept:instance → logId
         "log:version" to "version",
-        "log:features" to "features"
+        "log:features" to "features",
     )
 
     // ========================================
@@ -134,7 +134,7 @@ object StandardAttributes {
         COST_TOTAL to Type.NUMBER,
         COST_CURRENCY to Type.STRING,
         "log:version" to Type.STRING,
-        "log:features" to Type.STRING
+        "log:features" to Type.STRING,
     )
 
     // ========================================

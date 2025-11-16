@@ -22,7 +22,7 @@ class Query(
     /**
      * The original query string.
      */
-    val query: String = ""
+    val query: String = "",
 ) {
 
     // ========================================
@@ -381,7 +381,7 @@ class Query(
 
                 if (hasSpecificAttributes) {
                     throw PQLSemanticException(
-                        "Cannot mix 'SELECT *' with specific attribute selections for scope $scope"
+                        "Cannot mix 'SELECT *' with specific attribute selections for scope $scope",
                     )
                 }
             }
@@ -405,7 +405,7 @@ class Query(
         }
 
         if (!hasAggregation) {
-            return  // No aggregation, no need to validate GROUP BY
+            return // No aggregation, no need to validate GROUP BY
         }
 
         // For each scope with SELECT attributes, verify they're in GROUP BY
@@ -421,7 +421,7 @@ class Query(
             if (ungroupedAttrs.isNotEmpty()) {
                 throw PQLSemanticException(
                     "Attributes in SELECT must appear in GROUP BY when using aggregation functions. " +
-                        "Missing in GROUP BY for scope $scope: ${ungroupedAttrs.joinToString { it.toString() }}"
+                        "Missing in GROUP BY for scope $scope: ${ungroupedAttrs.joinToString { it.toString() }}",
                 )
             }
         }
@@ -442,7 +442,7 @@ class Query(
             if (attr.isClassifier) {
                 throw InvalidClassifierUsageException(
                     "Classifier '${attr.name}' cannot be used in SELECT clause. " +
-                        "Classifiers are only allowed in GROUP BY."
+                        "Classifiers are only allowed in GROUP BY.",
                 )
             }
         }
@@ -455,7 +455,7 @@ class Query(
                     val attr = classifierAttrs.first() as Attribute
                     throw InvalidClassifierUsageException(
                         "Classifier '${attr.name}' cannot be used in WHERE clause. " +
-                            "Classifiers are only allowed in GROUP BY."
+                            "Classifiers are only allowed in GROUP BY.",
                     )
                 }
             }
@@ -469,7 +469,7 @@ class Query(
                     val attr = classifierAttrs.first() as Attribute
                     throw InvalidClassifierUsageException(
                         "Classifier '${attr.name}' cannot be used in ORDER BY clause. " +
-                            "Classifiers are only allowed in GROUP BY."
+                            "Classifiers are only allowed in GROUP BY.",
                     )
                 }
             }
@@ -488,7 +488,7 @@ class Query(
      */
     fun validateDeleteConstraints() {
         if (deleteScope == null) {
-            return  // Not a DELETE query
+            return // Not a DELETE query
         }
 
         // Check that no SELECT clause is present
@@ -498,7 +498,7 @@ class Query(
             selectExpressions.values.any { it.isNotEmpty() }
         ) {
             throw PQLSemanticException(
-                "DELETE queries cannot have SELECT clause"
+                "DELETE queries cannot have SELECT clause",
             )
         }
 
@@ -507,7 +507,7 @@ class Query(
             limit.isEmpty()
         ) {
             throw PQLSemanticException(
-                "DELETE queries with ORDER BY must also specify LIMIT"
+                "DELETE queries with ORDER BY must also specify LIMIT",
             )
         }
     }
@@ -534,7 +534,7 @@ class Query(
                     val func = aggFunctions.first() as com.processm.processminterpreter.pql.model.Function
                     throw PQLSemanticException(
                         "Aggregation function '${func.name}' cannot be used in WHERE clause. " +
-                            "Use HAVING clause instead (not yet implemented)."
+                            "Use HAVING clause instead (not yet implemented).",
                     )
                 }
             }
@@ -561,8 +561,8 @@ class Query(
                 // Check if scope is invalid (ordinal < 0 means beyond LOG)
                 if (attr.scope.ordinal < 0) {
                     throw PQLSemanticException(
-                        "Attribute '${attr}' hoisted beyond LOG scope. " +
-                            "Hoisting prefix '${attr.hoistingPrefix}' results in invalid scope."
+                        "Attribute '$attr' hoisted beyond LOG scope. " +
+                            "Hoisting prefix '${attr.hoistingPrefix}' results in invalid scope.",
                     )
                 }
             }
@@ -643,7 +643,7 @@ class Query(
  */
 data class OrderedExpression(
     val expression: IExpression,
-    val direction: OrderDirection
+    val direction: OrderDirection,
 ) {
     override fun toString(): String = "$expression ${direction.name}"
 }

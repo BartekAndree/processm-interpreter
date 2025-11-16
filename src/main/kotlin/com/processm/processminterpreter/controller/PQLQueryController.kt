@@ -3,6 +3,8 @@ package com.processm.processminterpreter.controller
 import com.processm.processminterpreter.dto.ErrorResponse
 import com.processm.processminterpreter.service.PQLQueryService
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.CrossOrigin
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -10,8 +12,10 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 /**
  * REST Controller for PQL query operations
@@ -79,6 +83,71 @@ class PQLQueryController(
                     timestamp = LocalDateTime.now(),
                 ),
             )
+        }
+    }
+
+    /**
+     * Execute PQL query and return results as XES format
+     * POST /api/query/execute-xes
+     *
+     * @param request PQL query request containing query and optional logId
+     * @param compress Whether to gzip compress the output (default: false)
+     * @param logName Optional log name for the XES output (default: "Query Result Log")
+     * @return XES XML file (or gzipped XES if compress=true)
+     */
+    @PostMapping("/execute-xes")
+    fun executeQueryAsXES(
+        @RequestBody request: PQLQueryRequest,
+        @RequestParam(defaultValue = "false") compress: Boolean,
+        @RequestParam(defaultValue = "Query Result Log") logName: String,
+    ): ResponseEntity<ByteArray> {
+        logger.info("=== Executing PQL Query as XES ===")
+        logger.info("PQL: ${request.query}")
+        logger.info("LogId: ${request.logId ?: "ALL"}")
+        logger.info("Compress: $compress")
+        logger.info("LogName: $logName")
+
+        return try {
+            val xesBytes = pqlQueryService.executePQLQueryAsXES(
+                pqlQuery = request.query,
+                logId = request.logId,
+                compress = compress,
+                logName = logName,
+            )
+
+            // Generate filename with timestamp
+            val timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"))
+            val extension = if (compress) "xes.gz" else "xes"
+            val filename = "query_result_$timestamp.$extension"
+
+            // Set appropriate Content-Type and headers
+            val contentType = if (compress) {
+                MediaType.parseMediaType("application/gzip")
+            } else {
+                MediaType.parseMediaType("application/xml")
+            }
+
+            val headers = HttpHeaders().apply {
+                this.contentType = contentType
+                this.contentDisposition = org.springframework.http.ContentDisposition
+                    .attachment()
+                    .filename(filename)
+                    .build()
+                this.contentLength = xesBytes.size.toLong()
+            }
+
+            logger.info("XES output generated: ${xesBytes.size} bytes, filename: $filename")
+            ResponseEntity.ok()
+                .headers(headers)
+                .body(xesBytes)
+        } catch (e: Exception) {
+            logger.error("Error executing PQL query as XES", e)
+
+            // Return error as plain text since we can't return JSON for this endpoint
+            val errorMessage = "Error executing query as XES: ${e.message}"
+            ResponseEntity.internalServerError()
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(errorMessage.toByteArray())
         }
     }
 

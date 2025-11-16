@@ -11,7 +11,7 @@ package com.processm.processminterpreter.pql.model
 abstract class Expression(
     override val line: Int = -1,
     override val charPositionInLine: Int = -1,
-    vararg childExpressions: IExpression
+    vararg childExpressions: IExpression,
 ) : IExpression {
 
     override val children: List<IExpression> = childExpressions.toList()

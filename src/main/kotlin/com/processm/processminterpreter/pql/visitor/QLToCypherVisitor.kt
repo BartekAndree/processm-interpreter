@@ -949,7 +949,7 @@ class QLToCypherVisitor(
         return when (operator) {
             "=", "<>", "!=", ">", ">=", "<", "<=", "AND", "OR" -> "($left $operator $right)"
             "IN" -> "$left IN $right"
-            "LIKE" -> "$left =~ $right"  // Cypher uses =~ for regex/LIKE
+            "LIKE" -> "$left =~ $right" // Cypher uses =~ for regex/LIKE
             "MATCHES" -> "$left =~ $right"
             "+" -> "($left + $right)"
             "-" -> "($left - $right)"
@@ -1090,9 +1090,9 @@ class QLToCypherVisitor(
         // Convert LocalDateTime to ISO string
         // If time is midnight (00:00:00), format as date-only, otherwise include time
         val dateValue = if (lit.value.hour == 0 && lit.value.minute == 0 && lit.value.second == 0) {
-            lit.value.toLocalDate().toString()  // Date-only format: 2005-01-01
+            lit.value.toLocalDate().toString() // Date-only format: 2005-01-01
         } else {
-            lit.value.toString()  // Full datetime format: 2005-01-01T12:30:00
+            lit.value.toString() // Full datetime format: 2005-01-01T12:30:00
         }
         parameters[paramName] = dateValue
         return "\$$paramName"

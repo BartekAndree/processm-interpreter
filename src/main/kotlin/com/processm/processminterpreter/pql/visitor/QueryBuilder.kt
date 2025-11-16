@@ -195,7 +195,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
      * delete: DELETE SCOPE?
      */
     private fun buildDeleteClause(ctx: QLParser.DeleteContext, query: Query) {
-        val scopeText = ctx.SCOPE()?.text ?: "e"  // Default to EVENT
+        val scopeText = ctx.SCOPE()?.text ?: "e" // Default to EVENT
         val scope = Scope.parse(scopeText)
 
         query.deleteScope = scope
@@ -238,7 +238,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     buildLogicExpr(ctx.logic_expr(0)),
                     buildLogicExpr(ctx.logic_expr(1)),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -248,7 +248,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     buildLogicExpr(ctx.logic_expr(0)),
                     buildLogicExpr(ctx.logic_expr(1)),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -258,13 +258,13 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     "NOT",
                     buildLogicExpr(ctx.logic_expr(0)),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
             // Comparison operators: <, <=, =, !=, >, >=
             ctx.OP_LT() != null || ctx.OP_LE() != null || ctx.OP_EQ() != null ||
-            ctx.OP_NEQ() != null || ctx.OP_GT() != null || ctx.OP_GE() != null -> {
+                ctx.OP_NEQ() != null || ctx.OP_GT() != null || ctx.OP_GE() != null -> {
                 val op = when {
                     ctx.OP_LT() != null -> "<"
                     ctx.OP_LE() != null -> "<="
@@ -279,7 +279,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     buildArithExpr(ctx.arith_expr(0)),
                     buildArithExpr(ctx.arith_expr(1)),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -289,7 +289,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     "IS NULL",
                     buildArithExpr(ctx.arith_expr(0)),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -298,7 +298,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     "IS NOT NULL",
                     buildArithExpr(ctx.arith_expr(0)),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -309,7 +309,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     buildArithExpr(ctx.arith_expr(0)),
                     buildInList(ctx.in_list()),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -319,7 +319,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     buildArithExpr(ctx.arith_expr(0)),
                     buildInList(ctx.in_list()),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -330,7 +330,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     buildArithExpr(ctx.arith_expr(0)),
                     StringLiteral.parse(ctx.STRING().text, line, charPos),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -340,7 +340,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     buildArithExpr(ctx.arith_expr(0)),
                     StringLiteral.parse(ctx.STRING().text, line, charPos),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -404,7 +404,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                     buildArithExpr(ctx.arith_expr(0)),
                     buildArithExpr(ctx.arith_expr(1)),
                     line,
-                    charPos
+                    charPos,
                 )
             }
 
@@ -531,7 +531,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
             val direction = when {
                 orderedExprCtx.order_dir().ORDER_ASC() != null -> OrderDirection.ASCENDING
                 orderedExprCtx.order_dir().ORDER_DESC() != null -> OrderDirection.DESCENDING
-                else -> OrderDirection.ASCENDING  // Default
+                else -> OrderDirection.ASCENDING // Default
             }
 
             val scope = when (expr) {
@@ -563,7 +563,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                 0 -> Scope.EVENT
                 1 -> Scope.TRACE
                 2 -> Scope.LOG
-                else -> return@forEachIndexed  // Ignore extra limits
+                else -> return@forEachIndexed // Ignore extra limits
             }
 
             query.setLimit(scope, limitValue)
@@ -583,7 +583,7 @@ class QueryBuilder : QLParserBaseVisitor<Any>() {
                 0 -> Scope.EVENT
                 1 -> Scope.TRACE
                 2 -> Scope.LOG
-                else -> return@forEachIndexed  // Ignore extra offsets
+                else -> return@forEachIndexed // Ignore extra offsets
             }
 
             query.setOffset(scope, offsetValue)
@@ -604,7 +604,7 @@ class BinaryOperator(
     val left: IExpression,
     val right: IExpression,
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Expression(line, charPositionInLine, left, right) {
 
     override fun toString(): String = "($left $operator $right)"
@@ -617,7 +617,7 @@ class UnaryOperator(
     val operator: String,
     val operand: IExpression,
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Expression(line, charPositionInLine, operand) {
 
     override fun toString(): String = "($operator $operand)"
@@ -629,7 +629,7 @@ class UnaryOperator(
 class InListExpression(
     val values: List<IExpression>,
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Expression(line, charPositionInLine, *values.toTypedArray()) {
 
     override fun toString(): String = "(${values.joinToString(", ")})"

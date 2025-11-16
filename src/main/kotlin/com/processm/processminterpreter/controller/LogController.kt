@@ -65,18 +65,31 @@ class LogController(
                 )
             }
 
-            if (file.originalFilename?.endsWith(".xes", ignoreCase = true) != true) {
+            val filename = file.originalFilename ?: ""
+            val isXES = filename.endsWith(".xes", ignoreCase = true)
+            val isGzippedXES = filename.endsWith(".xes.gz", ignoreCase = true) ||
+                filename.endsWith(".xes.gzip", ignoreCase = true)
+
+            if (!isXES && !isGzippedXES) {
                 return ResponseEntity.badRequest().body(
                     XESUploadResponse(
                         success = false,
                         message = "Invalid file format",
-                        error = "Only XES files are supported",
+                        error = "Only XES files (.xes, .xes.gz) are supported",
                     ),
                 )
             }
 
+            // Handle gzip decompression if needed
+            val inputStream = if (isGzippedXES) {
+                logger.info("Decompressing gzipped XES file: $filename")
+                java.util.zip.GZIPInputStream(file.inputStream)
+            } else {
+                file.inputStream
+            }
+
             // Load XES file
-            val result = xesLoader.loadXESFile(file.inputStream, logId)
+            val result = xesLoader.loadXESFile(inputStream, logId)
 
             if (result.success) {
                 ResponseEntity.ok(

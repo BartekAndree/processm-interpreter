@@ -21,7 +21,7 @@ import java.util.UUID
 sealed class Literal<T>(
     val value: T,
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Expression(line, charPositionInLine) {
 
     override val type: Type
@@ -52,7 +52,7 @@ sealed class Literal<T>(
 class StringLiteral(
     value: String,
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Literal<String>(value, line, charPositionInLine) {
 
     companion object {
@@ -104,7 +104,7 @@ class StringLiteral(
          * @return index of closing quote, or s.length if no unescaped closing quote found
          */
         private fun findClosingQuote(s: String, quoteChar: Char): Int {
-            var i = 1  // Start after opening quote
+            var i = 1 // Start after opening quote
             var escaped = false
 
             while (i < s.length) {
@@ -139,14 +139,14 @@ class StringLiteral(
          */
         private fun unescapeJava(s: String): String {
             return s
-                .replace("\\\\", "\u0000")  // Temp placeholder for backslash
+                .replace("\\\\", "\u0000") // Temp placeholder for backslash
                 .replace("\\\"", "\"")
                 .replace("\\t", "\t")
                 .replace("\\n", "\n")
                 .replace("\\r", "\r")
                 .replace("\\f", "\u000C")
                 .replace("\\b", "\b")
-                .replace("\u0000", "\\")    // Replace placeholder with actual backslash
+                .replace("\u0000", "\\") // Replace placeholder with actual backslash
         }
     }
 
@@ -159,7 +159,7 @@ class StringLiteral(
 class NumberLiteral(
     value: Double,
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Literal<Double>(value, line, charPositionInLine) {
 
     companion object {
@@ -187,7 +187,7 @@ class NumberLiteral(
 class BooleanLiteral(
     value: Boolean,
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Literal<Boolean>(value, line, charPositionInLine) {
 
     companion object {
@@ -222,7 +222,7 @@ class BooleanLiteral(
 class DateTimeLiteral(
     value: LocalDateTime,
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Literal<LocalDateTime>(value, line, charPositionInLine) {
 
     companion object {
@@ -255,7 +255,7 @@ class DateTimeLiteral(
                     line,
                     charPos,
                     "Invalid datetime: $s (expected format: D2020-01-01 or D2020-01-01T12:30:00)",
-                    e
+                    e,
                 )
             }
         }
@@ -270,7 +270,7 @@ class DateTimeLiteral(
 class UUIDLiteral(
     value: UUID,
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Literal<UUID>(value, line, charPositionInLine) {
 
     companion object {
@@ -290,7 +290,7 @@ class UUIDLiteral(
                     line,
                     charPos,
                     "Invalid UUID: $s",
-                    e
+                    e,
                 )
             }
         }
@@ -302,7 +302,7 @@ class UUIDLiteral(
  */
 class NullLiteral(
     line: Int = -1,
-    charPositionInLine: Int = -1
+    charPositionInLine: Int = -1,
 ) : Literal<Nothing?>(null, line, charPositionInLine) {
 
     override fun toString(): String = "null"

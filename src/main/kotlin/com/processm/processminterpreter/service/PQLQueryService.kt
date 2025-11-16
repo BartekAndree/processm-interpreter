@@ -2,12 +2,14 @@ package com.processm.processminterpreter.service
 
 import com.processm.processminterpreter.pql.CypherQuery
 import com.processm.processminterpreter.pql.PQLTranslator
+import com.processm.processminterpreter.xes.XESWriter
 import org.neo4j.driver.Driver
 import org.neo4j.driver.Record
 import org.neo4j.driver.Result
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.io.ByteArrayOutputStream
 
 /**
  * Service for executing PQL queries
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional
 class PQLQueryService(
     private val pqlTranslator: PQLTranslator,
     private val neo4jDriver: Driver,
+    private val xesWriter: XESWriter,
 ) {
 
     private val logger = LoggerFactory.getLogger(PQLQueryService::class.java)
@@ -163,6 +166,41 @@ class PQLQueryService(
                 map
             }
             else -> value.asObject()
+        }
+    }
+
+    /**
+     * Execute PQL query and return results as XES XML
+     *
+     * @param pqlQuery PQL query string
+     * @param logId Optional log ID filter
+     * @param compress Whether to gzip compress the output
+     * @return XES XML as byte array
+     */
+    fun executePQLQueryAsXES(
+        pqlQuery: String,
+        logId: String? = null,
+        compress: Boolean = false,
+        logName: String = "Query Result Log",
+    ): ByteArray {
+        logger.info("Executing PQL query as XES: $pqlQuery (logId: $logId, compress: $compress)")
+
+        return try {
+            // Translate PQL to Cypher
+            val cypherQuery = pqlTranslator.translateToCypher(pqlQuery, logId)
+            logger.debug("Translated to Cypher: $cypherQuery")
+
+            // Execute Cypher query
+            val results = executeCypherQuery(cypherQuery)
+
+            // Convert results to XES
+            val outputStream = ByteArrayOutputStream()
+            xesWriter.writeXES(results, outputStream, compress, logName)
+
+            outputStream.toByteArray()
+        } catch (e: Exception) {
+            logger.error("Error executing PQL query as XES: $pqlQuery", e)
+            throw e
         }
     }
 

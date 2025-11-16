@@ -24,7 +24,7 @@ package com.processm.processminterpreter.pql.model
 class Attribute(
     attributeStr: String,
     override val line: Int = -1,
-    override val charPositionInLine: Int = -1
+    override val charPositionInLine: Int = -1,
 ) : Expression(line, charPositionInLine) {
 
     // Regex to parse: [^]* [scope:]name
@@ -35,7 +35,7 @@ class Attribute(
         ?: throw PQLSyntaxException(
             line,
             charPositionInLine,
-            "Invalid attribute syntax: $attributeStr"
+            "Invalid attribute syntax: $attributeStr",
         )
 
     /**
@@ -90,7 +90,7 @@ class Attribute(
         for (i in hoistingPrefix.indices) {
             currentScope = currentScope.upper
                 ?: throw InvalidScopeHoistingException(
-                    "Cannot hoist scope '$initial' beyond LOG (hoisting: '$hoistingPrefix')"
+                    "Cannot hoist scope '$initial' beyond LOG (hoisting: '$hoistingPrefix')",
                 )
         }
 

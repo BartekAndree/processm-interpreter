@@ -218,7 +218,7 @@ class LiteralTests {
     @Test
     fun invalidDateTimeThrowsException() {
         assertThrows(PQLSyntaxException::class.java) {
-            DateTimeLiteral.parse("D2020-13-01")  // Month 13 invalid
+            DateTimeLiteral.parse("D2020-13-01") // Month 13 invalid
         }
 
         assertThrows(PQLSyntaxException::class.java) {

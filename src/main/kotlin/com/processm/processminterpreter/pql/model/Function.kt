@@ -14,7 +14,7 @@ enum class FunctionType {
      * Aggregation functions combine multiple values into a single result.
      * Examples: count(e:id), sum(e:cost), avg(e:duration), min(e:timestamp), max(e:timestamp)
      */
-    AGGREGATION
+    AGGREGATION,
 }
 
 /**
@@ -41,7 +41,7 @@ class Function(
     functionName: String,
     override val line: Int = -1,
     override val charPositionInLine: Int = -1,
-    vararg args: IExpression
+    vararg args: IExpression,
 ) : Expression(line, charPositionInLine, *args) {
 
     // Regex to parse: [scope:]name
@@ -51,7 +51,7 @@ class Function(
         ?: throw PQLSyntaxException(
             line,
             charPositionInLine,
-            "Invalid function name: $functionName"
+            "Invalid function name: $functionName",
         )
 
     /**
@@ -96,7 +96,7 @@ class Function(
 
         if (children.size != expectedArgs) {
             throw InvalidFunctionException(
-                "Function '$name' expects $expectedArgs argument(s), got ${children.size}"
+                "Function '$name' expects $expectedArgs argument(s), got ${children.size}",
             )
         }
 
@@ -115,7 +115,7 @@ class Function(
             if (scope.ordinal > effectiveScope.ordinal) {
                 throw PQLSemanticException(
                     "Scope of scalar function '$name' ($scope) cannot be lower in hierarchy than " +
-                        "effective scope of its arguments ($effectiveScope)"
+                        "effective scope of its arguments ($effectiveScope)",
                 )
             }
         }
@@ -164,7 +164,7 @@ class Function(
             "lower" to Type.STRING,
 
             // Numeric functions (return NUMBER)
-            "round" to Type.NUMBER
+            "round" to Type.NUMBER,
         )
 
         /**
@@ -178,8 +178,8 @@ class Function(
             "count" to Type.NUMBER,
             "sum" to Type.NUMBER,
             "avg" to Type.NUMBER,
-            "min" to Type.ANY,  // Can return any type depending on input
-            "max" to Type.ANY   // Can return any type depending on input
+            "min" to Type.ANY, // Can return any type depending on input
+            "max" to Type.ANY, // Can return any type depending on input
         )
 
         /**
@@ -214,7 +214,7 @@ class Function(
             "sum" to 1,
             "avg" to 1,
             "min" to 1,
-            "max" to 1
+            "max" to 1,
         )
 
         /**

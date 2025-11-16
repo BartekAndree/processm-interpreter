@@ -10,7 +10,8 @@ package com.processm.processminterpreter.pql.model
 enum class Scope(val scopeName: String, val shortName: String) {
     LOG("log", "l"),
     TRACE("trace", "t"),
-    EVENT("event", "e");
+    EVENT("event", "e"),
+    ;
 
     /**
      * Returns the parent scope in the hierarchy.

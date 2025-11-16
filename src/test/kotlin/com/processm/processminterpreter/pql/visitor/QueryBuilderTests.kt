@@ -35,7 +35,7 @@ class QueryBuilderTests {
                 line: Int,
                 charPositionInLine: Int,
                 msg: String?,
-                e: org.antlr.v4.runtime.RecognitionException?
+                e: org.antlr.v4.runtime.RecognitionException?,
             ) {
                 throw PQLSyntaxException(line, charPositionInLine, "Parser error: $msg")
             }
@@ -271,7 +271,7 @@ class QueryBuilderTests {
 
         val ordered = eventOrderBy?.first()
         assertTrue(ordered?.expression is Attribute)
-        assertEquals(OrderDirection.ASCENDING, ordered?.direction)  // Default
+        assertEquals(OrderDirection.ASCENDING, ordered?.direction) // Default
     }
 
     @Test
@@ -392,7 +392,7 @@ class QueryBuilderTests {
         assertNotNull(query.orderByExpressions[Scope.TRACE])
 
         // limit
-        assertEquals(10L, query.limit[Scope.EVENT])  // First limit goes to EVENT
+        assertEquals(10L, query.limit[Scope.EVENT]) // First limit goes to EVENT
     }
 
     // ========================================

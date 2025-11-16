@@ -192,25 +192,25 @@ class FunctionTests {
     fun wrongNumberOfArgumentsTest() {
         // avg requires 1 argument
         assertThrows(InvalidFunctionException::class.java) {
-            Function("avg")  // No arguments
+            Function("avg") // No arguments
         }
 
         // year requires 1 argument
         assertThrows(InvalidFunctionException::class.java) {
-            Function("year")  // No arguments
+            Function("year") // No arguments
         }
 
         // now requires 0 arguments
         val attr = Attribute("e:timestamp")
         assertThrows(InvalidFunctionException::class.java) {
-            Function("now", args = arrayOf(attr))  // Should have no arguments
+            Function("now", args = arrayOf(attr)) // Should have no arguments
         }
 
         // Too many arguments
         val attr1 = Attribute("e:name")
         val attr2 = Attribute("e:timestamp")
         assertThrows(InvalidFunctionException::class.java) {
-            Function("year", args = arrayOf(attr1, attr2))  // year takes only 1 argument
+            Function("year", args = arrayOf(attr1, attr2)) // year takes only 1 argument
         }
     }
 
@@ -284,13 +284,13 @@ class FunctionTests {
     @Test
     fun helperMethodsTest() {
         assertTrue(Function.isScalar("year"))
-        assertTrue(Function.isScalar("YEAR"))  // Case insensitive
+        assertTrue(Function.isScalar("YEAR")) // Case insensitive
         assertTrue(Function.isScalar("upper"))
         assertFalse(Function.isScalar("count"))
         assertFalse(Function.isScalar("unknown"))
 
         assertTrue(Function.isAggregation("count"))
-        assertTrue(Function.isAggregation("COUNT"))  // Case insensitive
+        assertTrue(Function.isAggregation("COUNT")) // Case insensitive
         assertTrue(Function.isAggregation("sum"))
         assertFalse(Function.isAggregation("year"))
         assertFalse(Function.isAggregation("unknown"))

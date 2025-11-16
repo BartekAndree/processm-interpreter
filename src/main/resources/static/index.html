@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ProcessM Interpreter UI</title>
+    <title>ProcessM Interpreter - Neo4j Edition</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
@@ -73,8 +73,26 @@
             text-align: center;
             color: var(--text-secondary);
             font-size: 1.1rem;
-            margin-bottom: 3rem;
+            margin-bottom: 0.5rem;
             animation: fadeIn 0.8s ease-out;
+        }
+
+        .demo-badge {
+            text-align: center;
+            margin-bottom: 2rem;
+            animation: fadeIn 1s ease-out;
+        }
+
+        .demo-badge span {
+            display: inline-block;
+            background: var(--success-gradient);
+            color: var(--bg-primary);
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
         }
 
         @keyframes fadeInDown {
@@ -178,6 +196,20 @@
             margin-bottom: 1.5rem;
         }
 
+        .info-box {
+            background: rgba(79, 172, 254, 0.1);
+            border: 1px solid rgba(79, 172, 254, 0.3);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .info-box strong {
+            color: var(--accent-blue);
+        }
+
         button {
             background: var(--primary-gradient);
             color: var(--text-primary);
@@ -242,6 +274,7 @@
         button.danger:hover {
             box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
         }
+
         .form-group {
             margin-bottom: 1.5rem;
         }
@@ -274,7 +307,7 @@
         }
 
         textarea {
-            min-height: 150px;
+            min-height: 120px;
             font-family: 'JetBrains Mono', 'Courier New', monospace;
             resize: vertical;
         }
@@ -442,64 +475,112 @@
             padding: 8px 16px;
             font-size: 0.85rem;
         }
+
+        .quick-start {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .quick-start h3 {
+            color: var(--accent-purple);
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .quick-start ol {
+            margin-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .quick-start li {
+            margin-bottom: 0.5rem;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>ProcessM Interpreter</h1>
-    <p class="subtitle">Query your process logs with PQL - A modern process mining query language</p>
+    <p class="subtitle">Neo4j-Based Process Mining Query Engine with PQL Support</p>
+    <div class="demo-badge">
+        <span>🚀 Demo Ready</span>
+    </div>
 
     <div class="tabs">
-        <button class="tab-button active" onclick="openTab('logs')">Log Management</button>
-        <button class="tab-button" onclick="openTab('query')">PQL Query</button>
+        <button class="tab-button active" onclick="openTab('logs')">📊 Log Management</button>
+        <button class="tab-button" onclick="openTab('query')">🔍 PQL Query</button>
     </div>
 
     <div id="logs" class="tab-content active">
-        <div class="endpoint">
-            <h2>Available Logs</h2>
-            <div id="logList"></div>
-            <button id="refreshLogsButton">Refresh List</button>
+        <div class="quick-start">
+            <h3>🚀 Quick Start Guide</h3>
+            <ol>
+                <li><strong>Load Sample Data:</strong> Click "Load Hospital Log" below to load example dataset</li>
+                <li><strong>Run Queries:</strong> Switch to "PQL Query" tab</li>
+                <li><strong>Explore:</strong> Try sample queries or write your own PQL</li>
+                <li><strong>Export:</strong> Download results as CSV or XES format</li>
+            </ol>
         </div>
 
         <div class="endpoint">
-            <h2>Upload Log</h2>
+            <h2>Available Logs</h2>
+            <div id="logList"></div>
+            <button id="refreshLogsButton">🔄 Refresh List</button>
+        </div>
+
+        <div class="endpoint">
+            <h2>Load Sample Data</h2>
+            <div class="info-box">
+                <strong>Hospital Log Dataset:</strong> Real-life event log from a Dutch academic hospital (BPIC 2011).
+                Contains 1,143 cases and 150,291 events across multiple departments.
+            </div>
+            <button id="loadSampleButton">📥 Load Hospital Log (Recommended for Demo)</button>
+            <button id="loadSampleButton2" class="secondary">Load Sample Process Log</button>
+            <div class="output-block">
+                <pre id="uploadOutput">Click "Load Hospital Log" to get started...</pre>
+            </div>
+        </div>
+
+        <div class="endpoint">
+            <h2>Upload Custom Log</h2>
             <div class="form-group">
-                <label for="xesFileInput">Upload XES File</label>
+                <label for="xesFileInput">Upload XES File (.xes or .xes.gz, max 500MB)</label>
                 <input type="file" id="xesFileInput" accept=".xes,.xes.gz">
             </div>
-            <button id="uploadButton">Upload</button>
-            <button id="loadSampleButton" class="secondary">Load Hospital Log</button>
-            <button id="loadSampleButton2" class="secondary">Load Sample Process Log</button>
-          <div class="output-block">
-                <pre id="uploadOutput">...</pre>
-            </div>
+            <button id="uploadButton">📤 Upload</button>
         </div>
     </div>
 
     <div id="query" class="tab-content">
         <div class="endpoint">
             <h2>Execute PQL Query</h2>
+            <div class="info-box">
+                <strong>💡 Tip:</strong> Select a sample query below to see examples, or write your own PQL query.
+                Results can be exported to CSV or XES format.
+            </div>
             <div class="form-group">
-                <label for="activeLogSelect">Active Log</label>
+                <label for="activeLogSelect">📁 Active Log</label>
                 <select id="activeLogSelect"></select>
             </div>
             <div class="form-group">
-                <label for="pqlQuerySelect">Sample Queries</label>
+                <label for="pqlQuerySelect">📝 Sample Queries</label>
                 <select id="pqlQuerySelect">
                     <option value="">Select a sample query...</option>
                 </select>
             </div>
             <div class="form-group">
-                <label for="pqlQueryText">PQL Query</label>
-                <textarea id="pqlQueryText">select event:* limit 10</textarea>
+                <label for="pqlQueryText">✏️ PQL Query</label>
+                <textarea id="pqlQueryText">select event:* limit 20</textarea>
             </div>
-            <button id="pqlButton">Run Query</button>
+            <button id="pqlButton">▶️ Run Query</button>
 
             <div id="queryStatsContainer" style="display: none;"></div>
 
             <div class="output-block">
-                <div id="pqlOutput">...</div>
+                <div id="pqlOutput">Select a log and click "Run Query" to see results...</div>
             </div>
         </div>
     </div>
@@ -526,7 +607,7 @@
             if (!response.ok) {
                  outputElement.style.color = 'var(--red-color)';
             }
-            return JSON.parse(resultText); // Assume JSON response for further processing
+            return JSON.parse(resultText);
         } catch (error) {
             outputElement.style.color = 'var(--red-color)';
             outputElement.textContent = `Error: ${error.message}`;
@@ -559,8 +640,8 @@
                     listItem.innerHTML = `
                         <span><strong>${log.name || logId}</strong> (${logId})</span>
                         <div class="log-actions">
-                            <button onclick="getLogStatistics('${logId}')">Stats</button>
-                            <button class="danger" onclick="deleteLog('${logId}')">Delete</button>
+                            <button onclick="getLogStatistics('${logId}')">📊 Stats</button>
+                            <button class="danger" onclick="deleteLog('${logId}')">🗑️ Delete</button>
                         </div>
                     `;
                     logList.appendChild(listItem);
@@ -571,7 +652,7 @@
                     activeLogSelect.appendChild(option);
                 });
             } else {
-                logList.innerHTML = '<p>No logs found.</p>';
+                logList.innerHTML = '<p>No logs found. Load Hospital Log to get started!</p>';
             }
         } catch (error) {
             console.error("Failed to refresh logs", error);
@@ -605,6 +686,7 @@
     });
 
     document.getElementById('loadSampleButton').addEventListener('click', async () => {
+        uploadOutput.textContent = 'Loading Hospital Log (81MB)... This may take 1-3 minutes...';
         const params = new URLSearchParams({
             resourcePath: 'logs/Hospital_log.xes',
             logId: 'Hospital_log'
@@ -614,14 +696,13 @@
     });
 
     document.getElementById('loadSampleButton2').addEventListener('click', async () => {
-      const params = new URLSearchParams({
-        resourcePath: 'logs/sample_process.xes',
-        logId: 'sample_process'
-      });
-      await apiCall(`/logs/load-sample?${params}`, { method: 'POST' }, uploadOutput);
-      refreshLogs();
+        const params = new URLSearchParams({
+            resourcePath: 'logs/sample_process.xes',
+            logId: 'sample_process'
+        });
+        await apiCall(`/logs/load-sample?${params}`, { method: 'POST' }, uploadOutput);
+        refreshLogs();
     });
-
 
     // --- PQL Query ---
     const pqlButton = document.getElementById('pqlButton');
@@ -629,38 +710,28 @@
     const pqlOutput = document.getElementById('pqlOutput');
     const pqlQuerySelect = document.getElementById('pqlQuerySelect');
 
+    // Curated sample queries for Hospital_log.xes - guaranteed to work!
     const sampleQueries = {
-        // Basic queries (ProcessM PQL syntax - lowercase keywords, no FROM clause)
-        "Show all events": "select event:* limit 10",
-        "Show all traces": "select trace:* limit 10",
-        "Show specific fields": "select event:activity, event:timestamp, event:org_group limit 20",
+        // === BASICS - Show Different Scopes ===
+        "🔹 Show First 20 Events": "select event:* limit 20",
+        "🔹 Show First 10 Traces": "select trace:* limit 10",
 
-        // Simple filters
-        "Events by department": "select event:activity, event:timestamp where event:org_group = 'Radiotherapy' limit 20",
-        "Events with LIKE": "select event:activity, event:org_group where event:activity like 'vervolgconsult' limit 20",
-        "Events in time range": "select event:activity, event:timestamp where event:timestamp > 'D2005-02-01' and event:timestamp < 'D2005-06-30' limit 20",
+        // === SIMPLE FILTERS ===
+        "🏥 Events from Radiology Department": "select event:activity, event:timestamp, event:org_group where event:org_group = 'Radiology' limit 30",
+        "🏥 Events from General Lab": "select event:activity, event:timestamp where event:org_group = 'General Lab Clinical Chemistry' limit 25",
+        "🏥 Events from Operating Rooms": "select event:activity, event:org_group where event:org_group = 'Operating rooms' limit 30",
 
-        // Advanced filters
-        "Multiple departments": "select event:org_group, event:activity where event:org_group in ('Radiotherapy', 'Obstetrics & Gynaecology clinic', 'Nuclear Medicine') limit 50",
-        "Complex conditions": "select event:activity, event:org_group, event:timestamp where (event:org_group = 'Radiotherapy' or event:org_group like 'Obstetrics') and event:timestamp > 'D2005-02-01' limit 30",
+        // === AGGREGATIONS - Show Power of PQL ===
+        "📊 Count All Events": "select count(event:id)",
+        "📊 Events per Department (Top 10)": "select event:org_group, count(event:id) group by event:org_group order by count(event:id) desc limit 10",
+        "📊 Top 15 Most Frequent Activities": "select event:activity, count(event:id) group by event:activity order by count(event:id) desc limit 15",
 
-        // Aggregations
-        "Count all events": "select count(event:id)",
-        "Events per department": "select event:org_group, count(event:id) group by event:org_group order by count(event:id) desc",
-        "Top 10 activities": "select event:activity, count(event:id) group by event:activity order by count(event:id) desc limit 10",
-        "Events per section": "select event:Section, count(event:id) group by event:Section order by count(event:id) desc",
+        // === ADVANCED - Multiple Departments ===
+        "🔬 Compare 3 Departments": "select event:org_group, count(event:id) where event:org_group in ('Radiology', 'Radiotherapy', 'Nuclear Medicine') group by event:org_group order by count(event:id) desc",
 
-        // Simple selections
-        "All departments": "select event:org_group group by event:org_group order by event:org_group asc",
-        "All activity types": "select event:activity group by event:activity order by event:activity asc",
-
-        // Hospital-specific analysis
-        "Radiotherapy workload": "select event:activity, count(event:id) where event:org_group = 'Radiotherapy' group by event:activity order by count(event:id) desc",
-        "Department comparison": "select event:org_group, count(event:id) where event:org_group in ('Radiotherapy', 'Obstetrics & Gynaecology clinic', 'Nuclear Medicine', 'Cardiology') group by event:org_group order by count(event:id) desc",
-        "Consultation patterns": "select event:org_group, count(event:id) where event:activity like 'consult' group by event:org_group order by count(event:id) desc",
-        "Activity by section": "select event:Section, event:activity, count(event:id) where event:Section is not null group by event:Section, event:activity order by event:Section, count(event:id) desc limit 30",
-        "Recent events": "select event:activity, event:org_group, event:timestamp order by event:timestamp desc limit 20",
-        "Complex analysis": "select event:org_group, event:activity, count(event:id) where event:timestamp > 'D2005-01-01' and event:org_group in ('Radiotherapy', 'Obstetrics & Gynaecology clinic') group by event:org_group, event:activity order by count(event:id) desc limit 20"
+        // === SHOWCASE QUERIES ===
+        "⭐ All Departments (Sorted)": "select event:org_group group by event:org_group order by event:org_group asc",
+        "⭐ Recent Events (Latest First)": "select event:activity, event:org_group, event:timestamp order by event:timestamp desc limit 25"
     };
 
     function populateSampleQueries() {
@@ -701,7 +772,7 @@
             </div>
             <div class="stat-item">
                 <span class="stat-label">Query Type</span>
-                <span class="stat-value">${data.query.split(' ')[0]}</span>
+                <span class="stat-value">${data.query.split(' ')[0].toUpperCase()}</span>
             </div>
         `;
         container.appendChild(statsDiv);
@@ -710,9 +781,11 @@
         const actionsDiv = document.createElement('div');
         actionsDiv.className = 'action-buttons';
         actionsDiv.innerHTML = `
-            <button class="secondary" onclick="exportToCSV()">Export to CSV</button>
-            <button class="secondary" onclick="copyToClipboard()">Copy JSON</button>
-            <button class="secondary" onclick="toggleRawView()">Toggle Raw View</button>
+            <button class="secondary" onclick="exportToCSV()">📥 Export to CSV</button>
+            <button class="secondary" onclick="exportToXES(false)">📥 Export to XES</button>
+            <button class="secondary" onclick="exportToXES(true)">📥 Export to XES (gzip)</button>
+            <button class="secondary" onclick="copyToClipboard()">📋 Copy JSON</button>
+            <button class="secondary" onclick="toggleRawView()">🔄 Toggle Raw View</button>
         `;
         container.appendChild(actionsDiv);
 
@@ -720,7 +793,7 @@
         const cypherSection = document.createElement('div');
         cypherSection.innerHTML = `
             <div class="toggle-section" onclick="toggleCollapsible(this)">
-                <span>Generated Cypher Query</span>
+                <span>🔧 Generated Cypher Query</span>
                 <span>▼</span>
             </div>
             <div class="collapsible-content">
@@ -850,6 +923,78 @@
         window.URL.revokeObjectURL(url);
     }
 
+    async function exportToXES(compress = false) {
+        const logId = activeLogSelect.value;
+        const query = pqlQueryText.value;
+
+        if (!logId) {
+            alert('Please select an active log first.');
+            return;
+        }
+
+        if (!query) {
+            alert('Please enter a PQL query first.');
+            return;
+        }
+
+        try {
+            // Show loading indicator
+            const originalText = pqlOutput.textContent;
+            pqlOutput.textContent = `Exporting to XES${compress ? ' (compressed)' : ''}...`;
+            pqlOutput.style.color = 'var(--text-color)';
+
+            // Prepare request URL with query parameters
+            const params = new URLSearchParams({
+                compress: compress.toString(),
+                logName: `PQL Query Result - ${new Date().toISOString()}`
+            });
+
+            // Make request to execute-xes endpoint
+            const response = await fetch(`${API_BASE}/query/execute-xes?${params}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ logId, query })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+            }
+
+            // Get the blob from response
+            const blob = await response.blob();
+
+            // Get filename from Content-Disposition header or generate one
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = `query_result_${Date.now()}.${compress ? 'xes.gz' : 'xes'}`;
+
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (filenameMatch) {
+                    filename = filenameMatch[1];
+                }
+            }
+
+            // Create download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            // Show success message
+            pqlOutput.textContent = originalText;
+            alert(`XES file downloaded successfully: ${filename}`);
+
+        } catch (error) {
+            pqlOutput.style.color = 'var(--red-color)';
+            pqlOutput.textContent = `Error exporting to XES: ${error.message}`;
+            alert(`Failed to export to XES: ${error.message}`);
+        }
+    }
+
     function copyToClipboard() {
         if (!window.currentQueryResults) {
             alert('No data to copy');
@@ -890,7 +1035,6 @@
             pqlOutput.textContent = `Error: ${error.message}`;
         }
     });
-
 
     // --- Initial Load ---
     document.addEventListener('DOMContentLoaded', () => {

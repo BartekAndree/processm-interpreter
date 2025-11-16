@@ -42,5 +42,5 @@ enum class Type {
     /**
      * Unknown type - default when type cannot be determined
      */
-    UNKNOWN
+    UNKNOWN,
 }

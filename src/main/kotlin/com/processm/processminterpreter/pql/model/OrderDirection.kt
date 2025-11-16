@@ -11,7 +11,7 @@ enum class OrderDirection {
     },
     DESCENDING {
         override fun toString() = "desc"
-    };
+    }, ;
 
     companion object {
         /**

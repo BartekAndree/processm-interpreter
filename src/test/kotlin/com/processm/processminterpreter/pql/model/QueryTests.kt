@@ -288,9 +288,9 @@ class QueryTests {
 
         // Apply max limits
         val maxLimits = mapOf(
-            Scope.EVENT to 100L,  // More restrictive than 1000
-            Scope.TRACE to 100L,  // Less restrictive than 50
-            Scope.LOG to 10L      // New limit
+            Scope.EVENT to 100L, // More restrictive than 1000
+            Scope.TRACE to 100L, // Less restrictive than 50
+            Scope.LOG to 10L, // New limit
         )
 
         query.applyLimits(maxLimits)

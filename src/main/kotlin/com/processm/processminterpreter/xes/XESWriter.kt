@@ -20,12 +20,13 @@ import java.util.zip.GZIPOutputStream
  */
 @Component
 class XESWriter {
-
     private val logger = LoggerFactory.getLogger(XESWriter::class.java)
 
     // XES date format: yyyy-MM-dd'T'HH:mm:ss.SSSXXX
-    private val xesDateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
-        .withZone(ZoneId.systemDefault())
+    private val xesDateFormatter =
+        DateTimeFormatter
+            .ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
+            .withZone(ZoneId.systemDefault())
 
     /**
      * Write query results to XES format
@@ -43,11 +44,12 @@ class XESWriter {
     ) {
         logger.info("Writing XES output: ${results.size} records, compress: $compress")
 
-        val stream = if (compress) {
-            GZIPOutputStream(outputStream)
-        } else {
-            outputStream
-        }
+        val stream =
+            if (compress) {
+                GZIPOutputStream(outputStream)
+            } else {
+                outputStream
+            }
 
         stream.use { out ->
             val writer = OutputStreamWriter(out, StandardCharsets.UTF_8)
@@ -100,7 +102,10 @@ class XESWriter {
     /**
      * Write log-level attributes
      */
-    private fun writeLogAttributes(writer: OutputStreamWriter, logName: String) {
+    private fun writeLogAttributes(
+        writer: OutputStreamWriter,
+        logName: String,
+    ) {
         writer.write("\t<string key=\"concept:name\" value=\"${escapeXml(logName)}\"/>\n")
         writer.write("\t<string key=\"source\" value=\"ProcessM Interpreter Neo4j\"/>\n")
         writer.write("\t<date key=\"created\" value=\"${formatDateTime(LocalDateTime.now())}\"/>\n")
@@ -134,8 +139,8 @@ class XESWriter {
      *
      * Assumes each record has trace information (traceId or trace.traceId)
      */
-    private fun groupByTraces(results: List<Map<String, Any?>>): Map<String, List<Map<String, Any?>>> {
-        return results.groupBy { record ->
+    private fun groupByTraces(results: List<Map<String, Any?>>): Map<String, List<Map<String, Any?>>> =
+        results.groupBy { record ->
             // Try different possible trace ID locations
             when {
                 record.containsKey("traceId") -> record["traceId"]?.toString()
@@ -146,6 +151,7 @@ class XESWriter {
                         else -> null
                     }
                 }
+
                 record.containsKey("t") -> {
                     val trace = record["t"]
                     when (trace) {
@@ -153,15 +159,19 @@ class XESWriter {
                         else -> null
                     }
                 }
+
                 else -> null
             } ?: "unknown-trace-${System.currentTimeMillis()}"
         }
-    }
 
     /**
      * Write a single trace with its events
      */
-    private fun writeTrace(writer: OutputStreamWriter, traceId: String, events: List<Map<String, Any?>>) {
+    private fun writeTrace(
+        writer: OutputStreamWriter,
+        traceId: String,
+        events: List<Map<String, Any?>>,
+    ) {
         writer.write("\t<trace>\n")
 
         // Write trace attributes
@@ -171,15 +181,16 @@ class XESWriter {
         val firstEvent = events.firstOrNull()
         firstEvent?.let { event ->
             val trace = event["trace"] ?: event["t"]
-            if (trace is Map<*, *>) {
-                writeAttributes(writer, trace as Map<String, Any?>, level = 2, excludeKeys = setOf("traceId", "id", "labels"))
+            toStringMap(trace)?.let { traceMap ->
+                writeAttributes(writer, traceMap, level = 2, excludeKeys = setOf("traceId", "id", "labels"))
             }
         }
 
         // Write events (sorted by timestamp if available)
-        val sortedEvents = events.sortedBy { event ->
-            extractTimestamp(event)
-        }
+        val sortedEvents =
+            events.sortedBy { event ->
+                extractTimestamp(event)
+            }
 
         sortedEvents.forEach { event ->
             writeEvent(writer, event)
@@ -191,21 +202,19 @@ class XESWriter {
     /**
      * Write a single event
      */
-    private fun writeEvent(writer: OutputStreamWriter, event: Map<String, Any?>) {
+    private fun writeEvent(
+        writer: OutputStreamWriter,
+        event: Map<String, Any?>,
+    ) {
         writer.write("\t\t<event>\n")
 
         // Extract event data (might be nested under "event" or "e" key)
-        val eventData = when {
-            event.containsKey("event") -> {
-                val e = event["event"]
-                if (e is Map<*, *>) e as Map<String, Any?> else event
+        val eventData =
+            when {
+                event.containsKey("event") -> toStringMap(event["event"]) ?: event
+                event.containsKey("e") -> toStringMap(event["e"]) ?: event
+                else -> event
             }
-            event.containsKey("e") -> {
-                val e = event["e"]
-                if (e is Map<*, *>) e as Map<String, Any?> else event
-            }
-            else -> event
-        }
 
         // Write standard XES attributes
         val activity = eventData["activity"]?.toString() ?: eventData["concept:name"]?.toString() ?: "Unknown Activity"
@@ -214,11 +223,12 @@ class XESWriter {
         // Timestamp
         val timestamp = eventData["timestamp"] ?: eventData["time:timestamp"]
         if (timestamp != null) {
-            val formattedTimestamp = when (timestamp) {
-                is LocalDateTime -> formatDateTime(timestamp)
-                is String -> timestamp
-                else -> timestamp.toString()
-            }
+            val formattedTimestamp =
+                when (timestamp) {
+                    is LocalDateTime -> formatDateTime(timestamp)
+                    is String -> timestamp
+                    else -> timestamp.toString()
+                }
             writer.write("\t\t\t<date key=\"time:timestamp\" value=\"$formattedTimestamp\"/>\n")
         }
 
@@ -243,11 +253,23 @@ class XESWriter {
             writer,
             eventData,
             level = 3,
-            excludeKeys = setOf(
-                "id", "eventId", "activity", "timestamp", "resource", "lifecycle", "cost",
-                "concept:name", "time:timestamp", "org:resource", "lifecycle:transition", "cost:total",
-                "labels", "createdAt",
-            ),
+            excludeKeys =
+                setOf(
+                    "id",
+                    "eventId",
+                    "activity",
+                    "timestamp",
+                    "resource",
+                    "lifecycle",
+                    "cost",
+                    "concept:name",
+                    "time:timestamp",
+                    "org:resource",
+                    "lifecycle:transition",
+                    "cost:total",
+                    "labels",
+                    "createdAt",
+                ),
         )
 
         writer.write("\t\t</event>\n")
@@ -270,22 +292,28 @@ class XESWriter {
                     is String -> {
                         writer.write("$indent<string key=\"${escapeXml(key)}\" value=\"${escapeXml(value)}\"/>\n")
                     }
+
                     is Int, is Long -> {
                         writer.write("$indent<int key=\"${escapeXml(key)}\" value=\"$value\"/>\n")
                     }
+
                     is Float, is Double -> {
                         writer.write("$indent<float key=\"${escapeXml(key)}\" value=\"$value\"/>\n")
                     }
+
                     is Boolean -> {
                         writer.write("$indent<boolean key=\"${escapeXml(key)}\" value=\"$value\"/>\n")
                     }
+
                     is LocalDateTime -> {
                         writer.write("$indent<date key=\"${escapeXml(key)}\" value=\"${formatDateTime(value)}\"/>\n")
                     }
+
                     is Map<*, *> -> {
                         // Nested attributes - convert to string
                         writer.write("$indent<string key=\"${escapeXml(key)}\" value=\"${escapeXml(value.toString())}\"/>\n")
                     }
+
                     else -> {
                         // Other types - convert to string
                         writer.write("$indent<string key=\"${escapeXml(key)}\" value=\"${escapeXml(value.toString())}\"/>\n")
@@ -296,16 +324,36 @@ class XESWriter {
     }
 
     /**
+     * Safely cast Any? to Map<String, Any?> with type checking
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun toStringMap(value: Any?): Map<String, Any?>? =
+        when {
+            value == null -> null
+            value is Map<*, *> -> {
+                // Validate that keys are strings
+                if (value.keys.all { it is String }) {
+                    value as Map<String, Any?>
+                } else {
+                    null
+                }
+            }
+
+            else -> null
+        }
+
+    /**
      * Extract timestamp from event for sorting
      */
     private fun extractTimestamp(event: Map<String, Any?>): LocalDateTime? {
-        val eventData = when {
-            event.containsKey("event") -> event["event"] as? Map<String, Any?>
-            event.containsKey("e") -> event["e"] as? Map<String, Any?>
-            else -> event
-        }
+        val eventData =
+            when {
+                event.containsKey("event") -> toStringMap(event["event"]) ?: event
+                event.containsKey("e") -> toStringMap(event["e"]) ?: event
+                else -> event
+            }
 
-        val timestamp = eventData?.get("timestamp") ?: eventData?.get("time:timestamp")
+        val timestamp = eventData["timestamp"] ?: eventData["time:timestamp"]
         return when (timestamp) {
             is LocalDateTime -> timestamp
             else -> null
@@ -315,24 +363,24 @@ class XESWriter {
     /**
      * Format LocalDateTime to XES date format
      */
-    private fun formatDateTime(dateTime: LocalDateTime): String {
-        return dateTime.atZone(ZoneId.systemDefault()).format(xesDateFormatter)
-    }
+    private fun formatDateTime(dateTime: LocalDateTime): String = dateTime.atZone(ZoneId.systemDefault()).format(xesDateFormatter)
 
     /**
      * Escape XML special characters
      */
-    private fun escapeXml(text: String): String {
-        return text
+    private fun escapeXml(text: String): String =
+        text
             .replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
             .replace("'", "&apos;")
-    }
 }
 
 /**
  * Exception thrown when XES writing fails
  */
-class XESWriteException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+class XESWriteException(
+    message: String,
+    cause: Throwable? = null,
+) : RuntimeException(message, cause)

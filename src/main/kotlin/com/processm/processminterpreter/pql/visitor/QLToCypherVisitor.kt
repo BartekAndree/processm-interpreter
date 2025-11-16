@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory
 class QLToCypherVisitor(
     private val logId: String? = null,
 ) : QLParserBaseVisitor<Any>() {
-
     private val logger = LoggerFactory.getLogger(QLToCypherVisitor::class.java)
     private val parameters = mutableMapOf<String, Any>()
     private var paramCounter = 0
@@ -77,13 +76,9 @@ class QLToCypherVisitor(
      * and internal use for expression translation.
      */
     @Deprecated("Not used - replaced by Query model approach")
-    private fun visitRead_query_legacy(ctx: QLParser.Read_queryContext): CypherQuery {
-        return visitRead_query(ctx) as CypherQuery
-    }
+    private fun visitRead_query_legacy(ctx: QLParser.Read_queryContext): CypherQuery = visitRead_query(ctx)
 
-    private fun visitDelete_query_legacy(ctx: QLParser.Delete_queryContext): CypherQuery {
-        return visitDelete_query(ctx) as CypherQuery
-    }
+    private fun visitDelete_query_legacy(ctx: QLParser.Delete_queryContext): CypherQuery = visitDelete_query(ctx)
 
     // ========================================
     // READ QUERY (SELECT)
@@ -104,13 +99,13 @@ class QLToCypherVisitor(
 
         // Build components - dispatch to correct labeled alternative
         val selectClause = visit(selectCtx) as String
-        val whereClause = ctx.where()?.let { visitWhere(it) as String }
-        val groupByClause = ctx.group_by()?.let { visitGroup_by(it) as List<String> }
-        val orderByClause = ctx.order_by()?.let { visitOrder_by(it) as List<OrderByItem> }
-        val limitClause = ctx.limit()?.let { visitLimit(it) as List<Int> }
-        val offsetClause = ctx.offset()?.let { visitOffset(it) as List<Int> }
+        val whereClause = ctx.where()?.let { visitWhere(it) }
+        val groupByClause = ctx.group_by()?.let { visitGroup_by(it) }
+        val orderByClause = ctx.order_by()?.let { visitOrder_by(it) }
+        val limitClause = ctx.limit()?.let { visitLimit(it) }
+        val offsetClause = ctx.offset()?.let { visitOffset(it) }
 
-        logger.debug("Parsed - Scope: $currentScope, SELECT: $selectClause, WHERE: $whereClause")
+        logger.debug("Parsed - Scope: {}, SELECT: {}, WHERE: {}", currentScope, selectClause, whereClause)
 
         return buildReadQuery(
             scope = currentScope,
@@ -131,39 +126,35 @@ class QLToCypherVisitor(
         // Try to find scope from column_list
         val text = selectCtx.text.lowercase()
 
-        currentScope = when {
-            text.contains("event:") || text.contains("e:") -> Scope.EVENT
-            text.contains("trace:") || text.contains("t:") -> Scope.TRACE
-            text.contains("log:") || text.contains("l:") -> Scope.LOG
-            else -> Scope.EVENT // Default to event
-        }
+        currentScope =
+            when {
+                text.contains("event:") || text.contains("e:") -> Scope.EVENT
+                text.contains("trace:") || text.contains("t:") -> Scope.TRACE
+                text.contains("log:") || text.contains("l:") -> Scope.LOG
+                else -> Scope.EVENT // Default to event
+            }
 
-        logger.debug("Determined scope: $currentScope")
+        logger.debug("Determined scope: {}", currentScope)
     }
 
     /**
      * select_all_implicit
      */
-    override fun visitSelect_all_implicit(ctx: QLParser.Select_all_implicitContext): String {
-        return "*"
-    }
+    override fun visitSelect_all_implicit(ctx: QLParser.Select_all_implicitContext): String = "*"
 
     /**
      * select_all: SELECT '*'
      */
-    override fun visitSelect_all(ctx: QLParser.Select_allContext): String {
-        return "*"
-    }
+    override fun visitSelect_all(ctx: QLParser.Select_allContext): String = "*"
 
     /**
      * select_column_list: SELECT column_list
      */
     override fun visitSelect_column_list(ctx: QLParser.Select_column_listContext): String {
         // Process column_list - need to handle both labeled alternatives
-        val columnListCtx = ctx.column_list()
-        return when (columnListCtx) {
-            is QLParser.Scoped_select_allContext -> visitScoped_select_all(columnListCtx) as String
-            is QLParser.Column_list_arith_expr_rootContext -> visitColumn_list_arith_expr_root(columnListCtx) as String
+        return when (val columnListCtx = ctx.column_list()) {
+            is QLParser.Scoped_select_allContext -> visitScoped_select_all(columnListCtx)
+            is QLParser.Column_list_arith_expr_rootContext -> visitColumn_list_arith_expr_root(columnListCtx)
             else -> throw IllegalStateException("Unknown column_list type")
         }
     }
@@ -186,7 +177,7 @@ class QLToCypherVisitor(
 
         while (current != null) {
             if (current is QLParser.Column_list_arith_expr_rootContext) {
-                val expr = visitArith_expr_root(current.arith_expr_root()) as String
+                val expr = visitArith_expr_root(current.arith_expr_root())
                 expressions.add(expr)
                 current = current.column_list()
             } else if (current is QLParser.Scoped_select_allContext) {
@@ -200,9 +191,7 @@ class QLToCypherVisitor(
         return expressions.joinToString(", ")
     }
 
-    override fun visitArith_expr_root(ctx: QLParser.Arith_expr_rootContext): String {
-        return visitArith_expr(ctx.arith_expr()) as String
-    }
+    override fun visitArith_expr_root(ctx: QLParser.Arith_expr_rootContext): String = visitArith_expr(ctx.arith_expr())
 
     // ========================================
     // DELETE QUERY
@@ -218,10 +207,10 @@ class QLToCypherVisitor(
         val scope = extractScopeFromDelete(deleteCtx)
         currentScope = scope
 
-        val whereClause = ctx.where()?.let { visitWhere(it) as String }
-        val orderByClause = ctx.order_by()?.let { visitOrder_by(it) as List<OrderByItem> }
-        val limitClause = ctx.limit()?.let { visitLimit(it) as List<Int> }
-        val offsetClause = ctx.offset()?.let { visitOffset(it) as List<Int> }
+        val whereClause = ctx.where()?.let { visitWhere(it) }
+        val orderByClause = ctx.order_by()?.let { visitOrder_by(it) }
+        val limitClause = ctx.limit()?.let { visitLimit(it) }
+        val offsetClause = ctx.offset()?.let { visitOffset(it) }
 
         return buildDeleteQuery(
             scope = scope,
@@ -253,9 +242,7 @@ class QLToCypherVisitor(
     /**
      * where: WHERE logic_expr
      */
-    override fun visitWhere(ctx: QLParser.WhereContext): String {
-        return visitLogic_expr(ctx.logic_expr()) as String
-    }
+    override fun visitWhere(ctx: QLParser.WhereContext): String = visitLogic_expr(ctx.logic_expr())
 
     /**
      * logic_expr: Complex logical expressions with proper precedence
@@ -269,18 +256,18 @@ class QLToCypherVisitor(
      * 6. AND
      * 7. OR
      */
-    override fun visitLogic_expr(ctx: QLParser.Logic_exprContext): String {
-        return when {
+    override fun visitLogic_expr(ctx: QLParser.Logic_exprContext): String =
+        when {
             // Parenthesized expression
             ctx.logic_expr().size == 1 && ctx.text.startsWith("(") -> {
-                "(${visitLogic_expr(ctx.logic_expr(0)) as String})"
+                "(${visitLogic_expr(ctx.logic_expr(0))})"
             }
 
             // IN / NOT IN
             ctx.OP_IN() != null || ctx.OP_NOT_IN() != null -> {
-                val leftExpr = visitArith_expr(ctx.arith_expr(0)) as String
+                val leftExpr = visitArith_expr(ctx.arith_expr(0))
                 val operator = if (ctx.OP_IN() != null) "IN" else "NOT IN"
-                val inList = visitIn_list(ctx.in_list()) as List<Any>
+                val inList = visitIn_list(ctx.in_list())
                 val paramName = nextParamName()
                 parameters[paramName] = inList
                 "$leftExpr $operator \$$paramName"
@@ -288,7 +275,7 @@ class QLToCypherVisitor(
 
             // MATCHES (regex) / LIKE
             ctx.OP_MATCHES() != null || ctx.OP_LIKE() != null -> {
-                val leftExpr = visitArith_expr(ctx.arith_expr(0)) as String
+                val leftExpr = visitArith_expr(ctx.arith_expr(0))
                 val pattern = removeQuotes(ctx.STRING().text)
                 val paramName = nextParamName()
 
@@ -306,23 +293,24 @@ class QLToCypherVisitor(
             // Comparison operators
             ctx.OP_LT() != null || ctx.OP_LE() != null || ctx.OP_EQ() != null ||
                 ctx.OP_NEQ() != null || ctx.OP_GT() != null || ctx.OP_GE() != null -> {
-                val leftExpr = visitArith_expr(ctx.arith_expr(0)) as String
-                val rightExpr = visitArith_expr(ctx.arith_expr(1)) as String
-                val operator = when {
-                    ctx.OP_LT() != null -> "<"
-                    ctx.OP_LE() != null -> "<="
-                    ctx.OP_EQ() != null -> "="
-                    ctx.OP_NEQ() != null -> "<>"
-                    ctx.OP_GT() != null -> ">"
-                    ctx.OP_GE() != null -> ">="
-                    else -> throw IllegalStateException("Unknown comparison operator")
-                }
+                val leftExpr = visitArith_expr(ctx.arith_expr(0))
+                val rightExpr = visitArith_expr(ctx.arith_expr(1))
+                val operator =
+                    when {
+                        ctx.OP_LT() != null -> "<"
+                        ctx.OP_LE() != null -> "<="
+                        ctx.OP_EQ() != null -> "="
+                        ctx.OP_NEQ() != null -> "<>"
+                        ctx.OP_GT() != null -> ">"
+                        ctx.OP_GE() != null -> ">="
+                        else -> throw IllegalStateException("Unknown comparison operator")
+                    }
                 "$leftExpr $operator $rightExpr"
             }
 
             // NULL checks
             ctx.OP_IS_NULL() != null || ctx.OP_IS_NOT_NULL() != null -> {
-                val expr = visitArith_expr(ctx.arith_expr(0)) as String
+                val expr = visitArith_expr(ctx.arith_expr(0))
                 if (ctx.OP_IS_NULL() != null) {
                     "$expr IS NULL"
                 } else {
@@ -332,33 +320,30 @@ class QLToCypherVisitor(
 
             // NOT
             ctx.OP_NOT() != null -> {
-                "NOT (${visitLogic_expr(ctx.logic_expr(0)) as String})"
+                "NOT (${visitLogic_expr(ctx.logic_expr(0))})"
             }
 
             // AND
             ctx.OP_AND() != null -> {
-                val left = visitLogic_expr(ctx.logic_expr(0)) as String
-                val right = visitLogic_expr(ctx.logic_expr(1)) as String
+                val left = visitLogic_expr(ctx.logic_expr(0))
+                val right = visitLogic_expr(ctx.logic_expr(1))
                 "$left AND $right"
             }
 
             // OR
             ctx.OP_OR() != null -> {
-                val left = visitLogic_expr(ctx.logic_expr(0)) as String
-                val right = visitLogic_expr(ctx.logic_expr(1)) as String
+                val left = visitLogic_expr(ctx.logic_expr(0))
+                val right = visitLogic_expr(ctx.logic_expr(1))
                 "$left OR $right"
             }
 
             else -> throw IllegalStateException("Unknown logic_expr type: ${ctx.text}")
         }
-    }
 
     /**
      * in_list: '(' id_or_scalar_list ')'
      */
-    override fun visitIn_list(ctx: QLParser.In_listContext): List<Any> {
-        return visitId_or_scalar_list(ctx.id_or_scalar_list()) as List<Any>
-    }
+    override fun visitIn_list(ctx: QLParser.In_listContext): List<Any> = visitId_or_scalar_list(ctx.id_or_scalar_list())
 
     /**
      * id_or_scalar_list: (ID | scalar) (',' (ID | scalar))*
@@ -386,8 +371,8 @@ class QLToCypherVisitor(
      * 3. Addition, Subtraction
      * 4. Functions, Identifiers, Scalars
      */
-    override fun visitArith_expr(ctx: QLParser.Arith_exprContext): String {
-        return when {
+    override fun visitArith_expr(ctx: QLParser.Arith_exprContext): String =
+        when {
             // Parenthesized expression
             ctx.arith_expr().size == 1 && ctx.text.startsWith("(") -> {
                 "(${visitArith_expr(ctx.arith_expr(0)) as String})"
@@ -429,13 +414,12 @@ class QLToCypherVisitor(
 
             else -> throw IllegalStateException("Unknown arith_expr type: ${ctx.text}")
         }
-    }
 
     /**
      * func: FUNC_SCALAR0 '()' | FUNC_SCALAR1 '(' arith_expr ')' | FUNC_AGGR '(' ID ')'
      */
-    override fun visitFunc(ctx: QLParser.FuncContext): String {
-        return when {
+    override fun visitFunc(ctx: QLParser.FuncContext): String =
+        when {
             // Zero-argument function (e.g., now())
             ctx.FUNC_SCALAR0() != null -> {
                 val funcName = extractFunctionName(ctx.FUNC_SCALAR0().text)
@@ -458,7 +442,6 @@ class QLToCypherVisitor(
 
             else -> throw IllegalStateException("Unknown function type")
         }
-    }
 
     private fun extractFunctionName(tokenText: String): String {
         // Remove scope prefix and opening parenthesis
@@ -466,15 +449,17 @@ class QLToCypherVisitor(
         return tokenText.substringAfterLast(":").removeSuffix("(")
     }
 
-    private fun translateScalarFunction0(funcName: String): String {
-        return when (funcName.lowercase()) {
+    private fun translateScalarFunction0(funcName: String): String =
+        when (funcName.lowercase()) {
             "now" -> "datetime()" // Neo4j equivalent
             else -> throw IllegalArgumentException("Unsupported scalar function: $funcName")
         }
-    }
 
-    private fun translateScalarFunction1(funcName: String, arg: String): String {
-        return when (funcName.lowercase()) {
+    private fun translateScalarFunction1(
+        funcName: String,
+        arg: String,
+    ): String =
+        when (funcName.lowercase()) {
             // Date/time extraction
             "year" -> "date($arg).year"
             "month" -> "date($arg).month"
@@ -499,10 +484,12 @@ class QLToCypherVisitor(
 
             else -> throw IllegalArgumentException("Unsupported scalar function: $funcName")
         }
-    }
 
-    private fun translateAggregateFunction(funcName: String, arg: String): String {
-        return when (funcName.lowercase()) {
+    private fun translateAggregateFunction(
+        funcName: String,
+        arg: String,
+    ): String =
+        when (funcName.lowercase()) {
             "count" -> "count($arg)"
             "sum" -> "sum($arg)"
             "avg" -> "avg($arg)"
@@ -510,7 +497,6 @@ class QLToCypherVisitor(
             "max" -> "max($arg)"
             else -> throw IllegalArgumentException("Unsupported aggregate function: $funcName")
         }
-    }
 
     // ========================================
     // SCALARS & IDENTIFIERS
@@ -519,8 +505,8 @@ class QLToCypherVisitor(
     /**
      * scalar: STRING | NUMBER | BOOLEAN | DATETIME | UUID | NULL
      */
-    override fun visitScalar(ctx: QLParser.ScalarContext): Any? {
-        return when {
+    override fun visitScalar(ctx: QLParser.ScalarContext): Any? =
+        when {
             ctx.STRING() != null -> {
                 var value = removeQuotes(ctx.STRING().text)
                 // Handle dates in string format: 'D2006-01-01' -> '2006-01-01'
@@ -531,10 +517,12 @@ class QLToCypherVisitor(
                 }
                 value
             }
+
             ctx.NUMBER() != null -> {
                 val text = ctx.NUMBER().text
                 if (text.contains(".")) text.toDouble() else text.toLong()
             }
+
             ctx.BOOLEAN() != null -> ctx.BOOLEAN().text.toBoolean()
             ctx.DATETIME() != null -> {
                 // Remove scope prefix and 'D' prefix from datetime
@@ -550,11 +538,11 @@ class QLToCypherVisitor(
                 }
                 datetime
             }
+
             ctx.UUID() != null -> ctx.UUID().text
             ctx.NULL() != null -> null
             else -> throw IllegalStateException("Unknown scalar type")
         }
-    }
 
     /**
      * Translate field reference with scope prefix and hoisting support
@@ -625,13 +613,12 @@ class QLToCypherVisitor(
         }
     }
 
-    private fun scopeToNodeLabel(scope: Scope): String {
-        return when (scope) {
+    private fun scopeToNodeLabel(scope: Scope): String =
+        when (scope) {
             Scope.LOG -> "log"
             Scope.TRACE -> "trace"
             Scope.EVENT -> "event"
         }
-    }
 
     /**
      * Legacy translateField - now delegates to StandardAttributeMapper
@@ -661,32 +648,26 @@ class QLToCypherVisitor(
     /**
      * group_by: GROUP_BY id_list
      */
-    override fun visitGroup_by(ctx: QLParser.Group_byContext): List<String> {
-        return visitId_list(ctx.id_list()) as List<String>
-    }
+    override fun visitGroup_by(ctx: QLParser.Group_byContext): List<String> = visitId_list(ctx.id_list()) as List<String>
 
     /**
      * id_list: ID (',' ID)*
      */
-    override fun visitId_list(ctx: QLParser.Id_listContext): List<String> {
-        return ctx.ID().map { translateFieldReference(it.text) }
-    }
+    override fun visitId_list(ctx: QLParser.Id_listContext): List<String> = ctx.ID().map { translateFieldReference(it.text) }
 
     /**
      * order_by: ORDER_BY column_list_with_order
      */
-    override fun visitOrder_by(ctx: QLParser.Order_byContext): List<OrderByItem> {
-        return visitColumn_list_with_order(ctx.column_list_with_order()) as List<OrderByItem>
-    }
+    override fun visitOrder_by(ctx: QLParser.Order_byContext): List<OrderByItem> =
+        visitColumn_list_with_order(ctx.column_list_with_order()) as List<OrderByItem>
 
     /**
      * column_list_with_order: ordered_expression_root (',' ordered_expression_root)*
      */
-    override fun visitColumn_list_with_order(ctx: QLParser.Column_list_with_orderContext): List<OrderByItem> {
-        return ctx.ordered_expression_root().map {
+    override fun visitColumn_list_with_order(ctx: QLParser.Column_list_with_orderContext): List<OrderByItem> =
+        ctx.ordered_expression_root().map {
             visitOrdered_expression_root(it) as OrderByItem
         }
-    }
 
     /**
      * ordered_expression_root: arith_expr order_dir
@@ -700,24 +681,19 @@ class QLToCypherVisitor(
     /**
      * order_dir: (empty) | ORDER_ASC | ORDER_DESC
      */
-    override fun visitOrder_dir(ctx: QLParser.Order_dirContext): String {
-        return when {
+    override fun visitOrder_dir(ctx: QLParser.Order_dirContext): String =
+        when {
             ctx.ORDER_ASC() != null -> "ASC"
             ctx.ORDER_DESC() != null -> "DESC"
             else -> "ASC" // Default
         }
-    }
 
     /**
      * limit: LIMIT limit_number (',' limit_number)*
      */
-    override fun visitLimit(ctx: QLParser.LimitContext): List<Int> {
-        return ctx.limit_number().map { visitLimit_number(it) as Int }
-    }
+    override fun visitLimit(ctx: QLParser.LimitContext): List<Int> = ctx.limit_number().map { visitLimit_number(it) as Int }
 
-    override fun visitLimit_number(ctx: QLParser.Limit_numberContext): Int {
-        return ctx.NUMBER().text.toInt()
-    }
+    override fun visitLimit_number(ctx: QLParser.Limit_numberContext): Int = ctx.NUMBER().text.toInt()
 
     // ========================================
     // QUERY OBJECT TO CYPHER TRANSLATION
@@ -866,13 +842,12 @@ class QLToCypherVisitor(
     /**
      * Map from model.Scope to StandardAttributeMapper.Scope
      */
-    private fun mapScope(modelScope: com.processm.processminterpreter.pql.model.Scope): Scope {
-        return when (modelScope) {
+    private fun mapScope(modelScope: com.processm.processminterpreter.pql.model.Scope): Scope =
+        when (modelScope) {
             com.processm.processminterpreter.pql.model.Scope.LOG -> Scope.LOG
             com.processm.processminterpreter.pql.model.Scope.TRACE -> Scope.TRACE
             com.processm.processminterpreter.pql.model.Scope.EVENT -> Scope.EVENT
         }
-    }
 
     /**
      * Determine the primary scope from a Query object.
@@ -922,8 +897,8 @@ class QLToCypherVisitor(
      * - Functions (aggregations and scalar functions)
      * - InListExpression
      */
-    private fun translateExpressionToCypher(expr: com.processm.processminterpreter.pql.model.IExpression): String {
-        return when (expr) {
+    private fun translateExpressionToCypher(expr: com.processm.processminterpreter.pql.model.IExpression): String =
+        when (expr) {
             is BinaryOperator -> translateBinaryOperator(expr)
             is UnaryOperator -> translateUnaryOperator(expr)
             is InListExpression -> translateInListExpression(expr)
@@ -936,7 +911,6 @@ class QLToCypherVisitor(
             is com.processm.processminterpreter.pql.model.NullLiteral -> "null"
             else -> throw IllegalArgumentException("Unknown expression type: ${expr::class.simpleName}")
         }
-    }
 
     /**
      * Translate BinaryOperator to Cypher.
@@ -982,24 +956,26 @@ class QLToCypherVisitor(
      */
     private fun translateInListExpression(expr: InListExpression): String {
         // Extract raw values from the list (strings, numbers, etc.)
-        val rawValues = expr.values.map { value ->
-            when (value) {
-                is com.processm.processminterpreter.pql.model.StringLiteral -> value.value
-                is com.processm.processminterpreter.pql.model.NumberLiteral -> value.value
-                is com.processm.processminterpreter.pql.model.DateTimeLiteral -> {
-                    // Convert LocalDateTime to ISO string
-                    // If time is midnight, format as date-only
-                    if (value.value.hour == 0 && value.value.minute == 0 && value.value.second == 0) {
-                        value.value.toLocalDate().toString()
-                    } else {
-                        value.value.toString()
+        val rawValues =
+            expr.values.map { value ->
+                when (value) {
+                    is com.processm.processminterpreter.pql.model.StringLiteral -> value.value
+                    is com.processm.processminterpreter.pql.model.NumberLiteral -> value.value
+                    is com.processm.processminterpreter.pql.model.DateTimeLiteral -> {
+                        // Convert LocalDateTime to ISO string
+                        // If time is midnight, format as date-only
+                        if (value.value.hour == 0 && value.value.minute == 0 && value.value.second == 0) {
+                            value.value.toLocalDate().toString()
+                        } else {
+                            value.value.toString()
+                        }
                     }
+
+                    is com.processm.processminterpreter.pql.model.BooleanLiteral -> value.value
+                    is com.processm.processminterpreter.pql.model.NullLiteral -> null
+                    else -> throw IllegalArgumentException("Unsupported value type in IN list: ${value::class.simpleName}")
                 }
-                is com.processm.processminterpreter.pql.model.BooleanLiteral -> value.value
-                is com.processm.processminterpreter.pql.model.NullLiteral -> null
-                else -> throw IllegalArgumentException("Unsupported value type in IN list: ${value::class.simpleName}")
             }
-        }
 
         // Store the entire list as a single parameter
         val paramName = "param${paramCounter++}"
@@ -1024,30 +1000,31 @@ class QLToCypherVisitor(
         val args = func.children.map { translateExpressionToCypher(it) }
 
         // Map PQL function names to Cypher/Neo4j function names
-        val cypherFuncName = when (funcName) {
-            // Aggregation functions (mostly same)
-            "count", "sum", "avg", "min", "max" -> funcName
+        val cypherFuncName =
+            when (funcName) {
+                // Aggregation functions (mostly same)
+                "count", "sum", "avg", "min", "max" -> funcName
 
-            // Scalar functions - date/time
-            "year" -> "date.year"
-            "month" -> "date.month"
-            "day" -> "date.day"
-            "hour" -> "time.hour"
-            "minute" -> "time.minute"
-            "second" -> "time.second"
-            "now" -> "datetime()"
+                // Scalar functions - date/time
+                "year" -> "date.year"
+                "month" -> "date.month"
+                "day" -> "date.day"
+                "hour" -> "time.hour"
+                "minute" -> "time.minute"
+                "second" -> "time.second"
+                "now" -> "datetime()"
 
-            // String functions
-            "lower", "upper", "trim" -> funcName
-            "substring" -> "substring"
-            "length" -> "size"
+                // String functions
+                "lower", "upper", "trim" -> funcName
+                "substring" -> "substring"
+                "length" -> "size"
 
-            // Math functions
-            "abs", "ceil", "floor", "round", "sqrt" -> funcName
+                // Math functions
+                "abs", "ceil", "floor", "round", "sqrt" -> funcName
 
-            // Default: use as-is
-            else -> funcName
-        }
+                // Default: use as-is
+                else -> funcName
+            }
 
         return if (args.isEmpty()) {
             "$cypherFuncName()"
@@ -1063,13 +1040,14 @@ class QLToCypherVisitor(
         // Use parameterized queries to avoid SQL injection
         val paramName = "param${paramCounter++}"
         // Handle dates in string format: 'D2005-01-01' -> '2005-01-01'
-        val value = if (lit.value.startsWith("D") && lit.value.length >= 10 &&
-            lit.value[1].isDigit() && lit.value[5] == '-' && lit.value[8] == '-'
-        ) {
-            lit.value.substring(1) // Remove 'D' prefix from date strings
-        } else {
-            lit.value
-        }
+        val value =
+            if (lit.value.startsWith("D") && lit.value.length >= 10 &&
+                lit.value[1].isDigit() && lit.value[5] == '-' && lit.value[8] == '-'
+            ) {
+                lit.value.substring(1) // Remove 'D' prefix from date strings
+            } else {
+                lit.value
+            }
         parameters[paramName] = value
         return "\$$paramName"
     }
@@ -1077,9 +1055,7 @@ class QLToCypherVisitor(
     /**
      * Translate NumberLiteral to Cypher number.
      */
-    private fun translateNumberLiteral(lit: com.processm.processminterpreter.pql.model.NumberLiteral): String {
-        return lit.value.toString()
-    }
+    private fun translateNumberLiteral(lit: com.processm.processminterpreter.pql.model.NumberLiteral): String = lit.value.toString()
 
     /**
      * Translate DateTimeLiteral to Cypher datetime.
@@ -1089,11 +1065,12 @@ class QLToCypherVisitor(
         val paramName = "param${paramCounter++}"
         // Convert LocalDateTime to ISO string
         // If time is midnight (00:00:00), format as date-only, otherwise include time
-        val dateValue = if (lit.value.hour == 0 && lit.value.minute == 0 && lit.value.second == 0) {
-            lit.value.toLocalDate().toString() // Date-only format: 2005-01-01
-        } else {
-            lit.value.toString() // Full datetime format: 2005-01-01T12:30:00
-        }
+        val dateValue =
+            if (lit.value.hour == 0 && lit.value.minute == 0 && lit.value.second == 0) {
+                lit.value.toLocalDate().toString() // Date-only format: 2005-01-01
+            } else {
+                lit.value.toString() // Full datetime format: 2005-01-01T12:30:00
+            }
         parameters[paramName] = dateValue
         return "\$$paramName"
     }
@@ -1101,9 +1078,7 @@ class QLToCypherVisitor(
     /**
      * Translate BooleanLiteral to Cypher boolean.
      */
-    private fun translateBooleanLiteral(lit: com.processm.processminterpreter.pql.model.BooleanLiteral): String {
-        return lit.value.toString()
-    }
+    private fun translateBooleanLiteral(lit: com.processm.processminterpreter.pql.model.BooleanLiteral): String = lit.value.toString()
 
     /**
      * Build RETURN clause from Query object.
@@ -1186,13 +1161,17 @@ class QLToCypherVisitor(
     /**
      * Convert an Attribute to Cypher field reference.
      */
-    private fun attributeToCypherField(attr: com.processm.processminterpreter.pql.model.Attribute, nodeLabel: String): String {
+    private fun attributeToCypherField(
+        attr: com.processm.processminterpreter.pql.model.Attribute,
+        nodeLabel: String,
+    ): String {
         // Map attribute name to Neo4j property name
-        val modelScope = when (attr.scope) {
-            com.processm.processminterpreter.pql.model.Scope.LOG -> Scope.LOG
-            com.processm.processminterpreter.pql.model.Scope.TRACE -> Scope.TRACE
-            com.processm.processminterpreter.pql.model.Scope.EVENT -> Scope.EVENT
-        }
+        val modelScope =
+            when (attr.scope) {
+                com.processm.processminterpreter.pql.model.Scope.LOG -> Scope.LOG
+                com.processm.processminterpreter.pql.model.Scope.TRACE -> Scope.TRACE
+                com.processm.processminterpreter.pql.model.Scope.EVENT -> Scope.EVENT
+            }
 
         // Use the original attribute name as-is for translation
         // StandardAttributeMapper will handle mapping to Neo4j property names
@@ -1212,10 +1191,11 @@ class QLToCypherVisitor(
 
         return expressions.map { orderedExpr ->
             val cypherExpr = translateExpressionToCypher(orderedExpr.expression)
-            val direction = when (orderedExpr.direction) {
-                com.processm.processminterpreter.pql.model.OrderDirection.ASCENDING -> "ASC"
-                com.processm.processminterpreter.pql.model.OrderDirection.DESCENDING -> "DESC"
-            }
+            val direction =
+                when (orderedExpr.direction) {
+                    com.processm.processminterpreter.pql.model.OrderDirection.ASCENDING -> "ASC"
+                    com.processm.processminterpreter.pql.model.OrderDirection.DESCENDING -> "DESC"
+                }
             OrderByItem(cypherExpr, direction)
         }
     }
@@ -1223,19 +1203,18 @@ class QLToCypherVisitor(
     /**
      * offset: OFFSET offset_number (',' offset_number)*
      */
-    override fun visitOffset(ctx: QLParser.OffsetContext): List<Int> {
-        return ctx.offset_number().map { visitOffset_number(it) as Int }
-    }
+    override fun visitOffset(ctx: QLParser.OffsetContext): List<Int> = ctx.offset_number().map { visitOffset_number(it) as Int }
 
-    override fun visitOffset_number(ctx: QLParser.Offset_numberContext): Int {
-        return ctx.NUMBER().text.toInt()
-    }
+    override fun visitOffset_number(ctx: QLParser.Offset_numberContext): Int = ctx.NUMBER().text.toInt()
 
     // ========================================
     // CYPHER QUERY BUILDERS
     // ========================================
 
-    data class OrderByItem(val expression: String, val direction: String)
+    data class OrderByItem(
+        val expression: String,
+        val direction: String,
+    )
 
     @Deprecated("Not used - replaced by translateSelectQuery")
     private fun buildReadQuery(

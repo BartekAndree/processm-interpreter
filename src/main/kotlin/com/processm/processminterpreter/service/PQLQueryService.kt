@@ -23,19 +23,21 @@ class PQLQueryService(
     private val neo4jDriver: Driver,
     private val xesWriter: XESWriter,
 ) {
-
     private val logger = LoggerFactory.getLogger(PQLQueryService::class.java)
 
     /**
      * Execute PQL query and return results
      */
-    fun executePQLQuery(pqlQuery: String, logId: String? = null): PQLQueryResult {
+    fun executePQLQuery(
+        pqlQuery: String,
+        logId: String? = null,
+    ): PQLQueryResult {
         logger.info("Executing PQL query: $pqlQuery (logId: $logId)")
 
         return try {
             // Translate PQL to Cypher
             val cypherQuery = pqlTranslator.translateToCypher(pqlQuery, logId)
-            logger.debug("Translated to Cypher: $cypherQuery")
+            logger.debug("Translated to Cypher: {}", cypherQuery)
 
             // Execute Cypher query
             val results = executeCypherQuery(cypherQuery)
@@ -109,34 +111,45 @@ class PQLQueryService(
 
         record.keys().forEach { key ->
             val value = record.get(key)
-            map[key] = when {
-                value.isNull -> null
-                value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().NODE()) -> {
-                    // Convert Node to Map
-                    val node = value.asNode()
-                    val nodeMap = mutableMapOf<String, Any?>()
-                    nodeMap["id"] = node.id()
-                    nodeMap["labels"] = node.labels().toList()
-                    node.keys().forEach { nodeKey ->
-                        nodeMap[nodeKey] = convertNeo4jValue(node.get(nodeKey))
+            map[key] =
+                when {
+                    value.isNull -> null
+                    value.hasType(
+                        org.neo4j.driver.types.TypeSystem
+                            .getDefault()
+                            .NODE(),
+                    ) -> {
+                        // Convert Node to Map
+                        val node = value.asNode()
+                        val nodeMap = mutableMapOf<String, Any?>()
+                        nodeMap["id"] = node.elementId()
+                        nodeMap["labels"] = node.labels().toList()
+                        node.keys().forEach { nodeKey ->
+                            nodeMap[nodeKey] = convertNeo4jValue(node.get(nodeKey))
+                        }
+                        nodeMap
                     }
-                    nodeMap
-                }
-                value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().RELATIONSHIP()) -> {
-                    // Convert Relationship to Map
-                    val rel = value.asRelationship()
-                    val relMap = mutableMapOf<String, Any?>()
-                    relMap["id"] = rel.id()
-                    relMap["type"] = rel.type()
-                    relMap["startNodeId"] = rel.startNodeId()
-                    relMap["endNodeId"] = rel.endNodeId()
-                    rel.keys().forEach { relKey ->
-                        relMap[relKey] = convertNeo4jValue(rel.get(relKey))
+
+                    value.hasType(
+                        org.neo4j.driver.types.TypeSystem
+                            .getDefault()
+                            .RELATIONSHIP(),
+                    ) -> {
+                        // Convert Relationship to Map
+                        val rel = value.asRelationship()
+                        val relMap = mutableMapOf<String, Any?>()
+                        relMap["id"] = rel.elementId()
+                        relMap["type"] = rel.type()
+                        relMap["startNodeId"] = rel.startNodeElementId()
+                        relMap["endNodeId"] = rel.endNodeElementId()
+                        rel.keys().forEach { relKey ->
+                            relMap[relKey] = convertNeo4jValue(rel.get(relKey))
+                        }
+                        relMap
                     }
-                    relMap
+
+                    else -> convertNeo4jValue(value)
                 }
-                else -> convertNeo4jValue(value)
-            }
         }
 
         return map
@@ -145,29 +158,87 @@ class PQLQueryService(
     /**
      * Convert Neo4j Value to Java object
      */
-    private fun convertNeo4jValue(value: org.neo4j.driver.Value): Any? {
-        return when {
+    private fun convertNeo4jValue(value: org.neo4j.driver.Value): Any? =
+        when {
             value.isNull -> null
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().STRING()) -> value.asString()
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().INTEGER()) -> value.asLong()
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().FLOAT()) -> value.asDouble()
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().BOOLEAN()) -> value.asBoolean()
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().DATE_TIME()) -> value.asZonedDateTime()
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().LOCAL_DATE_TIME()) -> value.asLocalDateTime()
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().DATE()) -> value.asLocalDate()
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().TIME()) -> value.asOffsetTime()
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().LOCAL_TIME()) -> value.asLocalTime()
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().LIST()) -> value.asList { convertNeo4jValue(it) }
-            value.hasType(org.neo4j.driver.types.TypeSystem.getDefault().MAP()) -> {
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .STRING(),
+            ) -> value.asString()
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .INTEGER(),
+            ) -> value.asLong()
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .FLOAT(),
+            ) -> value.asDouble()
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .BOOLEAN(),
+            ) -> value.asBoolean()
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .DATE_TIME(),
+            ) -> value.asZonedDateTime()
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .LOCAL_DATE_TIME(),
+            ) -> value.asLocalDateTime()
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .DATE(),
+            ) -> value.asLocalDate()
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .TIME(),
+            ) -> value.asOffsetTime()
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .LOCAL_TIME(),
+            ) -> value.asLocalTime()
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .LIST(),
+            ) -> value.asList { convertNeo4jValue(it) }
+
+            value.hasType(
+                org.neo4j.driver.types.TypeSystem
+                    .getDefault()
+                    .MAP(),
+            ) -> {
                 val map = mutableMapOf<String, Any?>()
                 value.asMap().forEach { (k, v) ->
-                    map[k] = convertNeo4jValue(org.neo4j.driver.Values.value(v))
+                    map[k] =
+                        convertNeo4jValue(
+                            org.neo4j.driver.Values
+                                .value(v),
+                        )
                 }
                 map
             }
+
             else -> value.asObject()
         }
-    }
 
     /**
      * Execute PQL query and return results as XES XML
@@ -188,7 +259,7 @@ class PQLQueryService(
         return try {
             // Translate PQL to Cypher
             val cypherQuery = pqlTranslator.translateToCypher(pqlQuery, logId)
-            logger.debug("Translated to Cypher: $cypherQuery")
+            logger.debug("Translated to Cypher: {}", cypherQuery)
 
             // Execute Cypher query
             val results = executeCypherQuery(cypherQuery)
